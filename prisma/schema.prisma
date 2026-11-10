@@ -1,0 +1,220 @@
+// =============================================================================
+// Offline Classroom Polling System - Prisma schema (Prisma ORM 7, MySQL 8.4)
+// Database: offline_polling_db   Engine: InnoDB   Charset: utf8mb4
+//
+// Conventions
+//  - Prisma models/fields are PascalCase/camelCase; the database uses the
+//    snake_case table and column names from the specification (@@map / @map).
+//  - The connection URL is NOT declared here: Prisma 7 reads it from
+//    prisma.config.ts. The runtime client connects through a driver adapter
+//    (see src/lib/prisma.ts).
+//  - Foreign keys use ON DELETE RESTRICT wherever history must be preserved.
+//    CASCADE is used only for draft content that has no history of its own
+//    (questions of an activity, choices of a question).
+//  - CHECK constraints cannot be expressed in this file; they live in
+//    prisma/check-constraints.sql and are appended to the init migration.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum ActivityStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+// -----------------------------------------------------------------------------
+// 4.1 instructors
+// -----------------------------------------------------------------------------
+model Instructor {
+  id           Int      @id @default(autoincrement())
+  fullName     String   @map("full_name") @db.VarChar(120)
+  /// Stored trimmed + lower-cased by the service layer.
+  email        String   @unique @db.VarChar(150)
+  /// Argon2id or bcrypt hash. Never a plaintext password.
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  classrooms           Classroom[]
+  retakeAuthorizations RetakeAuthorization[]
+
+  @@map("instructors")
+}
+
+// -----------------------------------------------------------------------------
+// 4.2 classrooms
+// -----------------------------------------------------------------------------
+model Classroom {
+  id            Int       @id @default(autoincrement())
+  instructorId  Int       @map("instructor_id")
+  classroomName String    @map("classroom_name") @db.VarChar(120)
+  description   String?   @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  /// NULL = active. Classrooms are archived, never deleted.
+  archivedAt    DateTime? @map("archived_at") @db.DateTime(0)
+
+  instructor Instructor @relation(fields: [instructorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  activities Activity[]
+
+  // Serves "my active classrooms" and also covers the instructor_id FK.
+  @@index([instructorId, archivedAt])
+  @@map("classrooms")
+}
+
+// -----------------------------------------------------------------------------
+// 4.3 activities
+// -----------------------------------------------------------------------------
+model Activity {
+  id           Int            @id @default(autoincrement())
+  classroomId  Int            @map("classroom_id")
+  title        String         @db.VarChar(150)
+  instructions String?        @db.Text
+  status       ActivityStatus @default(DRAFT)
+  /// Assigned when the activity is opened; kept after closing (historical).
+  /// Globally unique, so a code is never reused. NULL while DRAFT.
+  sessionCode  String?        @unique @map("session_code") @db.VarChar(12)
+  openedAt     DateTime?      @map("opened_at") @db.DateTime(0)
+  closedAt     DateTime?      @map("closed_at") @db.DateTime(0)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+
+  classroom    Classroom     @relation(fields: [classroomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  questions    Question[]
+  participants Participant[]
+
+  // Serves "activities of a classroom, filtered by status" and the FK.
+  @@index([classroomId, status])
+  @@map("activities")
+}
+
+// -----------------------------------------------------------------------------
+// 4.4 questions
+// -----------------------------------------------------------------------------
+model Question {
+  id           Int    @id @default(autoincrement())
+  activityId   Int    @map("activity_id")
+  questionText String @map("question_text") @db.Text
+  /// CHECK (points > 0) - see check-constraints.sql
+  points       Int    @default(1)
+  /// Display order, starting at 1. Gaps are allowed.
+  position     Int
+
+  // CASCADE: deleting a DRAFT activity/question removes its content. History
+  // is still protected because participants and submission_answers RESTRICT.
+  activity Activity           @relation(fields: [activityId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  choices  Choice[]
+  answers  SubmissionAnswer[]
+
+  @@unique([activityId, position])
+  @@map("questions")
+}
+
+// -----------------------------------------------------------------------------
+// 4.5 choices
+// -----------------------------------------------------------------------------
+model Choice {
+  id         Int     @id @default(autoincrement())
+  questionId Int     @map("question_id")
+  choiceText String  @map("choice_text") @db.VarChar(500)
+  /// Never serialise this field to a student browser.
+  isCorrect  Boolean @default(false) @map("is_correct")
+  position   Int
+
+  question   Question           @relation(fields: [questionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  selectedIn SubmissionAnswer[]
+
+  @@unique([questionId, position])
+  @@map("choices")
+}
+
+// -----------------------------------------------------------------------------
+// 4.6 participants
+// -----------------------------------------------------------------------------
+model Participant {
+  id             Int      @id @default(autoincrement())
+  activityId     Int      @map("activity_id")
+  displayName    String   @map("display_name") @db.VarChar(120)
+  /// Trimmed, whitespace-collapsed, lower-cased copy of displayName. Exists so
+  /// MySQL can enforce "no duplicate join" even under concurrent requests.
+  normalizedName String   @map("normalized_name") @db.VarChar(120)
+  /// SHA-256 (hex) of the random participant session token. The raw token only
+  /// lives in the student's cookie, so a database leak does not leak sessions.
+  sessionTokenHash String @unique @map("session_token_hash") @db.Char(64)
+  joinedAt       DateTime @default(now()) @map("joined_at") @db.DateTime(0)
+
+  activity            Activity             @relation(fields: [activityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  submissions         Submission[]
+  retakeAuthorization RetakeAuthorization?
+
+  // Also covers the activity_id FK.
+  @@unique([activityId, normalizedName])
+  @@map("participants")
+}
+
+// -----------------------------------------------------------------------------
+// 4.7 submissions
+// -----------------------------------------------------------------------------
+model Submission {
+  id            Int      @id @default(autoincrement())
+  participantId Int      @map("participant_id")
+  /// 1 = normal submission, 2 = authorised retake. CHECK (IN (1, 2)).
+  attemptNumber Int      @map("attempt_number")
+  /// Historical result of this attempt. Never recomputed.
+  score         Decimal  @db.Decimal(8, 2)
+  submittedAt   DateTime @default(now()) @map("submitted_at") @db.DateTime(0)
+
+  participant Participant        @relation(fields: [participantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  answers     SubmissionAnswer[]
+
+  // Also covers the participant_id FK.
+  @@unique([participantId, attemptNumber])
+  @@map("submissions")
+}
+
+// -----------------------------------------------------------------------------
+// 4.8 submission_answers
+// -----------------------------------------------------------------------------
+model SubmissionAnswer {
+  id               Int     @id @default(autoincrement())
+  submissionId     Int     @map("submission_id")
+  questionId       Int     @map("question_id")
+  selectedChoiceId Int     @map("selected_choice_id")
+  /// Snapshot of correctness at submission time.
+  isCorrect        Boolean @map("is_correct")
+  awardedPoints    Decimal @map("awarded_points") @db.Decimal(8, 2)
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  choice     Choice     @relation(fields: [selectedChoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Also covers the submission_id FK.
+  @@unique([submissionId, questionId])
+  @@index([questionId])
+  @@index([selectedChoiceId])
+  @@map("submission_answers")
+}
+
+// -----------------------------------------------------------------------------
+// 4.9 retake_authorizations
+// -----------------------------------------------------------------------------
+model RetakeAuthorization {
+  id            Int       @id @default(autoincrement())
+  /// UNIQUE: at most one retake authorisation per participant.
+  participantId Int       @unique @map("participant_id")
+  authorizedBy  Int       @map("authorized_by")
+  authorizedAt  DateTime  @default(now()) @map("authorized_at") @db.DateTime(0)
+  /// Set when the second attempt is accepted. Single use.
+  usedAt        DateTime? @map("used_at") @db.DateTime(0)
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  instructor  Instructor  @relation(fields: [authorizedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([authorizedBy])
+  @@map("retake_authorizations")
+}

@@ -1,0 +1,91 @@
+erDiagram
+    instructors ||--o{ classrooms : "owns"
+    classrooms ||--o{ activities : "contains"
+    activities ||--o{ questions : "has"
+    questions ||--o{ choices : "offers"
+    activities ||--o{ participants : "is joined by"
+    participants ||--o{ submissions : "makes (max 2)"
+    submissions ||--o{ submission_answers : "contains"
+    questions ||--o{ submission_answers : "is answered in"
+    choices ||--o{ submission_answers : "is selected in"
+    participants ||--o| retake_authorizations : "may receive one"
+    instructors ||--o{ retake_authorizations : "grants"
+
+    instructors {
+        INT id PK "auto increment"
+        VARCHAR full_name "120, not null"
+        VARCHAR email UK "150, lower-cased"
+        VARCHAR password_hash "255, Argon2id/bcrypt"
+        DATETIME created_at "default now"
+    }
+
+    classrooms {
+        INT id PK "auto increment"
+        INT instructor_id FK "RESTRICT"
+        VARCHAR classroom_name "120, not null"
+        VARCHAR description "255, nullable"
+        DATETIME created_at "default now"
+        DATETIME archived_at "nullable, NULL = active"
+    }
+
+    activities {
+        INT id PK "auto increment"
+        INT classroom_id FK "RESTRICT"
+        VARCHAR title "150, not null"
+        TEXT instructions "nullable"
+        ENUM status "DRAFT, OPEN, CLOSED"
+        VARCHAR session_code UK "12, nullable"
+        DATETIME opened_at "nullable"
+        DATETIME closed_at "nullable"
+        DATETIME created_at "default now"
+    }
+
+    questions {
+        INT id PK "auto increment"
+        INT activity_id FK "CASCADE (draft content)"
+        TEXT question_text "not null"
+        INT points "default 1, CHECK > 0"
+        INT position "UK with activity_id"
+    }
+
+    choices {
+        INT id PK "auto increment"
+        INT question_id FK "CASCADE (draft content)"
+        VARCHAR choice_text "500, not null"
+        BOOLEAN is_correct "default false"
+        INT position "UK with question_id"
+    }
+
+    participants {
+        INT id PK "auto increment"
+        INT activity_id FK "RESTRICT"
+        VARCHAR display_name "120, as typed"
+        VARCHAR normalized_name "UK with activity_id"
+        CHAR session_token_hash UK "64, SHA-256 of cookie token"
+        DATETIME joined_at "default now"
+    }
+
+    submissions {
+        INT id PK "auto increment"
+        INT participant_id FK "RESTRICT"
+        INT attempt_number "UK with participant_id, CHECK 1 or 2"
+        DECIMAL score "8,2 historical result"
+        DATETIME submitted_at "default now"
+    }
+
+    submission_answers {
+        INT id PK "auto increment"
+        INT submission_id FK "RESTRICT, UK with question_id"
+        INT question_id FK "RESTRICT"
+        INT selected_choice_id FK "RESTRICT"
+        BOOLEAN is_correct "snapshot"
+        DECIMAL awarded_points "8,2 snapshot"
+    }
+
+    retake_authorizations {
+        INT id PK "auto increment"
+        INT participant_id FK,UK "RESTRICT, one per participant"
+        INT authorized_by FK "RESTRICT, instructor"
+        DATETIME authorized_at "default now"
+        DATETIME used_at "nullable, set on use"
+    }
