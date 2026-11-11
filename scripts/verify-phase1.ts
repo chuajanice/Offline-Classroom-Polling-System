@@ -3,7 +3,7 @@
 //   npm run db:verify
 //
 // What it proves
-//   1. Structure   - the nine tables, 11 foreign keys (with the intended
+//   1. Structure   - the nine primary tables, 11 foreign keys (with the intended
 //                    RESTRICT/CASCADE rules), 9 unique indexes and 7 CHECK
 //                    constraints exist exactly as designed.
 //   2. CRUD        - rows can be created, read, updated and (draft content)
@@ -164,6 +164,16 @@ const EXPECTED_UNIQUE_INDEXES = [
   "submissions(participant_id,attempt_number)",
 ];
 
+// Supporting objects added by LATER phases. They are not part of the nine primary
+// tables of the specification, so they are tolerated here (and verified when
+// present), while any other unexpected table / key / index still fails.
+// Phase 2: instructor_sessions (server-side login sessions).
+const SUPPORTING_TABLES = ["instructor_sessions"];
+const SUPPORTING_FOREIGN_KEYS: Record<string, string> = {
+  "instructor_sessions->instructors": "CASCADE",
+};
+const SUPPORTING_UNIQUE_INDEXES = ["instructor_sessions(token_hash)"];
+
 const EXPECTED_CHECKS = [
   "chk_activities_lifecycle",
   "chk_choices_position_positive",
@@ -182,12 +192,15 @@ async function verifyStructure() {
     return `MySQL ${rows[0]?.v ?? "unknown"}`;
   });
 
-  await check("exactly the nine expected tables exist", async () => {
+  await check("the nine primary tables exist (and nothing unknown besides supporting tables)", async () => {
     const rows = await prisma.$queryRaw<{ name: string }[]>`
       SELECT TABLE_NAME AS name FROM information_schema.TABLES
       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME <> '_prisma_migrations'
       ORDER BY TABLE_NAME`;
-    const actual = rows.map((r) => String(r.name)).sort();
+    const actual = rows
+      .map((r) => String(r.name))
+      .filter((name) => !SUPPORTING_TABLES.includes(name))
+      .sort();
     assert(
       JSON.stringify(actual) === JSON.stringify(EXPECTED_TABLES),
       `found [${actual.join(", ")}]`,
@@ -202,7 +215,7 @@ async function verifyStructure() {
     assert(bad.length === 0, `not InnoDB: ${bad.join(", ")}`);
   });
 
-  await check("11 foreign keys with the intended ON DELETE rules", async () => {
+  await check("the 11 foreign keys have the intended ON DELETE rules", async () => {
     const rows = await prisma.$queryRaw<{ child: string; parent: string; del_rule: string }[]>`
       SELECT TABLE_NAME AS child, REFERENCED_TABLE_NAME AS parent, DELETE_RULE AS del_rule
       FROM information_schema.REFERENTIAL_CONSTRAINTS
@@ -213,8 +226,13 @@ async function verifyStructure() {
     for (const [key, rule] of Object.entries(EXPECTED_FOREIGN_KEYS)) {
       if (actual[key] !== rule) problems.push(`${key}: expected ${rule}, got ${actual[key] ?? "missing"}`);
     }
+    for (const [key, rule] of Object.entries(SUPPORTING_FOREIGN_KEYS)) {
+      if (key in actual && actual[key] !== rule) problems.push(`${key}: expected ${rule}, got ${actual[key]}`);
+    }
     for (const key of Object.keys(actual)) {
-      if (!(key in EXPECTED_FOREIGN_KEYS)) problems.push(`unexpected foreign key ${key}`);
+      if (!(key in EXPECTED_FOREIGN_KEYS) && !(key in SUPPORTING_FOREIGN_KEYS)) {
+        problems.push(`unexpected foreign key ${key}`);
+      }
     }
     assert(problems.length === 0, problems.join("; "));
   });
@@ -226,7 +244,10 @@ async function verifyStructure() {
       FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE() AND NON_UNIQUE = 0 AND INDEX_NAME <> 'PRIMARY'
       GROUP BY TABLE_NAME, INDEX_NAME`;
-    const actual = rows.map((r) => `${String(r.t)}(${String(r.cols)})`).sort();
+    const actual = rows
+      .map((r) => `${String(r.t)}(${String(r.cols)})`)
+      .filter((index) => !SUPPORTING_UNIQUE_INDEXES.includes(index))
+      .sort();
     assert(
       JSON.stringify(actual) === JSON.stringify(EXPECTED_UNIQUE_INDEXES),
       `found [${actual.join(" | ")}]`,
@@ -572,30 +593,34 @@ async function verifyBehaviour(run: string) {
     prisma.activity.create({ data: { classroomId, title: "bad draft", sessionCode: `Y${run}`.toUpperCase() } }),
   );
 
+
   // Foreign keys / orphans
   await expectRejected("submission for a participant that does not exist", FOREIGN_KEY, () =>
     prisma.submission.create({ data: { participantId: 2147483647, attemptNumber: 1, score: "0.00" } }),
   );
 
-  await expectRejected("answer that selects a choice that does not exist", FOREIGN_KEY, async () => {
-    const testSubmission = await prisma.submission.create({
-      data: {
-        participantId: participant2Id,
-        attemptNumber: 1,
-        score: "0.00",
-      },
-    });
+  // Use a fresh submission so the unique (submissionId, questionId)
+  // constraint does not interfere with the invalid-choice foreign-key test.
+  const invalidChoiceSubmission = await prisma.submission.create({
+    data: {
+      participantId: participant2Id,
+      attemptNumber: 1,
+      score: "0.00",
+    },
+  });
 
-    await prisma.submissionAnswer.create({
+  await expectRejected("answer that selects a choice that does not exist", FOREIGN_KEY, () =>
+    prisma.submissionAnswer.create({
       data: {
-        submissionId: testSubmission.id,
+        submissionId: invalidChoiceSubmission.id,
         questionId: q2Id,
         selectedChoiceId: 2147483647,
         isCorrect: false,
         awardedPoints: "0.00",
       },
-    });
-  });
+    }),
+  );
+
 
   // History is protected (RESTRICT)
   await expectRejected("delete an instructor who owns classrooms", FOREIGN_KEY, () =>

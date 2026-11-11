@@ -10,6 +10,7 @@ erDiagram
     choices ||--o{ submission_answers : "is selected in"
     participants ||--o| retake_authorizations : "may receive one"
     instructors ||--o{ retake_authorizations : "grants"
+    instructors ||--o{ instructor_sessions : "has login sessions"
 
     instructors {
         INT id PK "auto increment"
@@ -88,4 +89,12 @@ erDiagram
         INT authorized_by FK "RESTRICT, instructor"
         DATETIME authorized_at "default now"
         DATETIME used_at "nullable, set on use"
+    }
+
+    instructor_sessions {
+        INT id PK "auto increment"
+        INT instructor_id FK "CASCADE (Phase 2, supporting table)"
+        CHAR token_hash UK "64, SHA-256 of cookie token"
+        DATETIME created_at "default now"
+        DATETIME expires_at "created_at + 8 hours"
     }

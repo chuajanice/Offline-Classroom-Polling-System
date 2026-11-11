@@ -2,6 +2,8 @@
 
 Offline Classroom Polling System. This document covers the system architecture, the normalized MySQL design, every key / constraint / index, the design decisions taken where the specification left room, and the ERD.
 
+> **Phase 2 update:** one supporting table, `instructor_sessions`, was added for server-side login sessions (see section 2.9 and `docs/PHASE2_AUTH.md`). The nine primary tables below are unchanged.
+
 ## 1. System architecture
 
 ### 1.1 Runtime topology (LAN, no internet needed)
@@ -151,6 +153,20 @@ MySQL has no declarative way to say "at least N child rows" or "exactly one chil
 - exactly one `is_correct = true` choice per question;
 - the selected choice belongs to the answered question, and the question belongs to the participant's activity.
 
+### 2.9 Supporting table added in Phase 2: `instructor_sessions`
+
+Not one of the nine primary tables of the specification (section 4 says "nine *primary* tables"). Section 6 requires server-side sessions with random identifiers and a logout that truly invalidates them, which needs somewhere to store sessions.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INT, PK, auto increment | |
+| `instructor_id` | INT, FK -> `instructors.id` | **ON DELETE CASCADE**: sessions are ephemeral, not history |
+| `token_hash` | CHAR(64), UNIQUE | SHA-256 of the cookie token; the token itself is never stored |
+| `created_at` | DATETIME, default now | |
+| `expires_at` | DATETIME | `created_at` + 8 hours (absolute lifetime) |
+
+Indexes: unique on `token_hash` (every request looks sessions up by it), plain on `instructor_id` (FK) and on `expires_at` (expiry clean-up). Existing tables, columns and data are untouched. `scripts/verify-phase1.ts` tolerates this one known supporting table and still fails on any unknown extra table, key or index.
+
 ## 3. Decisions and deviations from the specification
 
 | # | Decision | Reason |
@@ -163,6 +179,7 @@ MySQL has no declarative way to say "at least N child rows" or "exactly one chil
 | D6 | Case- and accent-insensitive collation `utf8mb4_0900_ai_ci` | MySQL default. Consequence: "Jose" and "JOSÉ" count as the same name in one activity |
 | D7 | `DATETIME` (seconds precision), stored in UTC by Prisma | Matches §4 (`DATETIME`); ordering of attempts uses `attempt_number`, not time |
 | D8 | Positions may have gaps and are unique per parent | Add/delete are supported without renumbering; a future "reorder" feature must swap inside a transaction |
+| D9 | A tenth, supporting table `instructor_sessions` (Phase 2) | Server-side sessions with real logout need server-side storage; stateless tokens cannot be revoked and an in-memory store is lost on every restart |
 
 ## 4. Entity-relationship diagram
 
@@ -181,6 +198,7 @@ erDiagram
     choices ||--o{ submission_answers : "is selected in"
     participants ||--o| retake_authorizations : "may receive one"
     instructors ||--o{ retake_authorizations : "grants"
+    instructors ||--o{ instructor_sessions : "has login sessions"
 
     instructors {
         INT id PK "auto increment"
@@ -259,6 +277,14 @@ erDiagram
         INT authorized_by FK "RESTRICT, instructor"
         DATETIME authorized_at "default now"
         DATETIME used_at "nullable, set on use"
+    }
+
+    instructor_sessions {
+        INT id PK "auto increment"
+        INT instructor_id FK "CASCADE (Phase 2, supporting table)"
+        CHAR token_hash UK "64, SHA-256 of cookie token"
+        DATETIME created_at "default now"
+        DATETIME expires_at "created_at + 8 hours"
     }
 ```
 

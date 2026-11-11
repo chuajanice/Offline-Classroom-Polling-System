@@ -1,0 +1,223 @@
+diff -ruN a/README-PHASE1.md b/README-PHASE1.md
+--- a/README-PHASE1.md	2026-11-11 03:36:06.818864270 +0000
++++ b/README-PHASE1.md	2026-11-11 03:36:06.819752202 +0000
+@@ -146,3 +146,7 @@
+ 
+ - **Node 26**: the specification asks for Node 26, but Prisma's documented support list is `^20.19`, `^22.12` and `^24`. It is expected to work (Prisma tests all active LTS releases) but this has not been confirmed. If `npx prisma -v` fails on Node 26, develop on Node 24 LTS.
+ - **Next.js 16.4+** enables *Cache Components* by default in new apps. This application reads live database state and cookies on nearly every request, so the simpler default rendering model is a better fit. If the generated `next.config.ts` contains `cacheComponents: true`, remove it (or set it to `false`) before Phase 2.
++
++## After Phase 1
++
++Phase 2 (authentication) is documented in `README-PHASE2.md`. It adds one supporting table, `instructor_sessions`; `npm run db:verify` keeps passing before and after that migration.
+diff -ruN a/docs/PHASE1_DESIGN.md b/docs/PHASE1_DESIGN.md
+--- a/docs/PHASE1_DESIGN.md	2026-11-11 03:36:06.823288612 +0000
++++ b/docs/PHASE1_DESIGN.md	2026-11-11 03:36:06.824232226 +0000
+@@ -2,6 +2,8 @@
+ 
+ Offline Classroom Polling System. This document covers the system architecture, the normalized MySQL design, every key / constraint / index, the design decisions taken where the specification left room, and the ERD.
+ 
++> **Phase 2 update:** one supporting table, `instructor_sessions`, was added for server-side login sessions (see section 2.9 and `docs/PHASE2_AUTH.md`). The nine primary tables below are unchanged.
++
+ ## 1. System architecture
+ 
+ ### 1.1 Runtime topology (LAN, no internet needed)
+@@ -151,6 +153,20 @@
+ - exactly one `is_correct = true` choice per question;
+ - the selected choice belongs to the answered question, and the question belongs to the participant's activity.
+ 
++### 2.9 Supporting table added in Phase 2: `instructor_sessions`
++
++Not one of the nine primary tables of the specification (section 4 says "nine *primary* tables"). Section 6 requires server-side sessions with random identifiers and a logout that truly invalidates them, which needs somewhere to store sessions.
++
++| Column | Type | Notes |
++|---|---|---|
++| `id` | INT, PK, auto increment | |
++| `instructor_id` | INT, FK -> `instructors.id` | **ON DELETE CASCADE**: sessions are ephemeral, not history |
++| `token_hash` | CHAR(64), UNIQUE | SHA-256 of the cookie token; the token itself is never stored |
++| `created_at` | DATETIME, default now | |
++| `expires_at` | DATETIME | `created_at` + 8 hours (absolute lifetime) |
++
++Indexes: unique on `token_hash` (every request looks sessions up by it), plain on `instructor_id` (FK) and on `expires_at` (expiry clean-up). Existing tables, columns and data are untouched. `scripts/verify-phase1.ts` tolerates this one known supporting table and still fails on any unknown extra table, key or index.
++
+ ## 3. Decisions and deviations from the specification
+ 
+ | # | Decision | Reason |
+@@ -163,6 +179,7 @@
+ | D6 | Case- and accent-insensitive collation `utf8mb4_0900_ai_ci` | MySQL default. Consequence: "Jose" and "JOSÉ" count as the same name in one activity |
+ | D7 | `DATETIME` (seconds precision), stored in UTC by Prisma | Matches §4 (`DATETIME`); ordering of attempts uses `attempt_number`, not time |
+ | D8 | Positions may have gaps and are unique per parent | Add/delete are supported without renumbering; a future "reorder" feature must swap inside a transaction |
++| D9 | A tenth, supporting table `instructor_sessions` (Phase 2) | Server-side sessions with real logout need server-side storage; stateless tokens cannot be revoked and an in-memory store is lost on every restart |
+ 
+ ## 4. Entity-relationship diagram
+ 
+@@ -181,6 +198,7 @@
+     choices ||--o{ submission_answers : "is selected in"
+     participants ||--o| retake_authorizations : "may receive one"
+     instructors ||--o{ retake_authorizations : "grants"
++    instructors ||--o{ instructor_sessions : "has login sessions"
+ 
+     instructors {
+         INT id PK "auto increment"
+@@ -260,6 +278,14 @@
+         DATETIME authorized_at "default now"
+         DATETIME used_at "nullable, set on use"
+     }
++
++    instructor_sessions {
++        INT id PK "auto increment"
++        INT instructor_id FK "CASCADE (Phase 2, supporting table)"
++        CHAR token_hash UK "64, SHA-256 of cookie token"
++        DATETIME created_at "default now"
++        DATETIME expires_at "created_at + 8 hours"
++    }
+ ```
+ 
+ ### Relationships
+diff -ruN a/docs/erd.mmd b/docs/erd.mmd
+--- a/docs/erd.mmd	2026-11-11 03:36:06.827651285 +0000
++++ b/docs/erd.mmd	2026-11-11 03:36:06.828531074 +0000
+@@ -10,6 +10,7 @@
+     choices ||--o{ submission_answers : "is selected in"
+     participants ||--o| retake_authorizations : "may receive one"
+     instructors ||--o{ retake_authorizations : "grants"
++    instructors ||--o{ instructor_sessions : "has login sessions"
+ 
+     instructors {
+         INT id PK "auto increment"
+@@ -89,3 +90,11 @@
+         DATETIME authorized_at "default now"
+         DATETIME used_at "nullable, set on use"
+     }
++
++    instructor_sessions {
++        INT id PK "auto increment"
++        INT instructor_id FK "CASCADE (Phase 2, supporting table)"
++        CHAR token_hash UK "64, SHA-256 of cookie token"
++        DATETIME created_at "default now"
++        DATETIME expires_at "created_at + 8 hours"
++    }
+diff -ruN a/prisma/schema.prisma b/prisma/schema.prisma
+--- a/prisma/schema.prisma	2026-11-11 03:36:06.831895299 +0000
++++ b/prisma/schema.prisma	2026-11-11 03:36:06.832816578 +0000
+@@ -44,6 +44,7 @@
+ 
+   classrooms           Classroom[]
+   retakeAuthorizations RetakeAuthorization[]
++  sessions             InstructorSession[]
+ 
+   @@map("instructors")
+ }
+@@ -218,3 +219,30 @@
+   @@index([authorizedBy])
+   @@map("retake_authorizations")
+ }
++
++// -----------------------------------------------------------------------------
++// Phase 2 supporting table: instructor_sessions
++//
++// Not one of the nine primary tables of the specification (section 4). It
++// exists because section 6 requires server-side sessions with random
++// identifiers and a logout that really invalidates them.
++//
++//  - Only a SHA-256 hash of the cookie token is stored, so a database leak does
++//    not leak usable sessions (same approach as participants.session_token_hash).
++//  - ON DELETE CASCADE: sessions are ephemeral, not history. Deleting an
++//    instructor (never done by the app) removes their sessions.
++// -----------------------------------------------------------------------------
++model InstructorSession {
++  id           Int      @id @default(autoincrement())
++  instructorId Int      @map("instructor_id")
++  /// SHA-256 (hex) of the random token held in the HttpOnly cookie.
++  tokenHash    String   @unique @map("token_hash") @db.Char(64)
++  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(0)
++  expiresAt    DateTime @map("expires_at") @db.DateTime(0)
++
++  instructor Instructor @relation(fields: [instructorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
++
++  @@index([instructorId])
++  @@index([expiresAt])
++  @@map("instructor_sessions")
++}
+diff -ruN a/scripts/verify-phase1.ts b/scripts/verify-phase1.ts
+--- a/scripts/verify-phase1.ts	2026-11-11 03:36:06.836290308 +0000
++++ b/scripts/verify-phase1.ts	2026-11-11 03:36:06.837217157 +0000
+@@ -3,7 +3,7 @@
+ //   npm run db:verify
+ //
+ // What it proves
+-//   1. Structure   - the nine tables, 11 foreign keys (with the intended
++//   1. Structure   - the nine primary tables, 11 foreign keys (with the intended
+ //                    RESTRICT/CASCADE rules), 9 unique indexes and 7 CHECK
+ //                    constraints exist exactly as designed.
+ //   2. CRUD        - rows can be created, read, updated and (draft content)
+@@ -164,6 +164,16 @@
+   "submissions(participant_id,attempt_number)",
+ ];
+ 
++// Supporting objects added by LATER phases. They are not part of the nine primary
++// tables of the specification, so they are tolerated here (and verified when
++// present), while any other unexpected table / key / index still fails.
++// Phase 2: instructor_sessions (server-side login sessions).
++const SUPPORTING_TABLES = ["instructor_sessions"];
++const SUPPORTING_FOREIGN_KEYS: Record<string, string> = {
++  "instructor_sessions->instructors": "CASCADE",
++};
++const SUPPORTING_UNIQUE_INDEXES = ["instructor_sessions(token_hash)"];
++
+ const EXPECTED_CHECKS = [
+   "chk_activities_lifecycle",
+   "chk_choices_position_positive",
+@@ -182,12 +192,15 @@
+     return `MySQL ${rows[0]?.v ?? "unknown"}`;
+   });
+ 
+-  await check("exactly the nine expected tables exist", async () => {
++  await check("the nine primary tables exist (and nothing unknown besides supporting tables)", async () => {
+     const rows = await prisma.$queryRaw<{ name: string }[]>`
+       SELECT TABLE_NAME AS name FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME <> '_prisma_migrations'
+       ORDER BY TABLE_NAME`;
+-    const actual = rows.map((r) => String(r.name)).sort();
++    const actual = rows
++      .map((r) => String(r.name))
++      .filter((name) => !SUPPORTING_TABLES.includes(name))
++      .sort();
+     assert(
+       JSON.stringify(actual) === JSON.stringify(EXPECTED_TABLES),
+       `found [${actual.join(", ")}]`,
+@@ -202,7 +215,7 @@
+     assert(bad.length === 0, `not InnoDB: ${bad.join(", ")}`);
+   });
+ 
+-  await check("11 foreign keys with the intended ON DELETE rules", async () => {
++  await check("the 11 foreign keys have the intended ON DELETE rules", async () => {
+     const rows = await prisma.$queryRaw<{ child: string; parent: string; del_rule: string }[]>`
+       SELECT TABLE_NAME AS child, REFERENCED_TABLE_NAME AS parent, DELETE_RULE AS del_rule
+       FROM information_schema.REFERENTIAL_CONSTRAINTS
+@@ -213,8 +226,13 @@
+     for (const [key, rule] of Object.entries(EXPECTED_FOREIGN_KEYS)) {
+       if (actual[key] !== rule) problems.push(`${key}: expected ${rule}, got ${actual[key] ?? "missing"}`);
+     }
++    for (const [key, rule] of Object.entries(SUPPORTING_FOREIGN_KEYS)) {
++      if (key in actual && actual[key] !== rule) problems.push(`${key}: expected ${rule}, got ${actual[key]}`);
++    }
+     for (const key of Object.keys(actual)) {
+-      if (!(key in EXPECTED_FOREIGN_KEYS)) problems.push(`unexpected foreign key ${key}`);
++      if (!(key in EXPECTED_FOREIGN_KEYS) && !(key in SUPPORTING_FOREIGN_KEYS)) {
++        problems.push(`unexpected foreign key ${key}`);
++      }
+     }
+     assert(problems.length === 0, problems.join("; "));
+   });
+@@ -226,7 +244,10 @@
+       FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND NON_UNIQUE = 0 AND INDEX_NAME <> 'PRIMARY'
+       GROUP BY TABLE_NAME, INDEX_NAME`;
+-    const actual = rows.map((r) => `${String(r.t)}(${String(r.cols)})`).sort();
++    const actual = rows
++      .map((r) => `${String(r.t)}(${String(r.cols)})`)
++      .filter((index) => !SUPPORTING_UNIQUE_INDEXES.includes(index))
++      .sort();
+     assert(
+       JSON.stringify(actual) === JSON.stringify(EXPECTED_UNIQUE_INDEXES),
+       `found [${actual.join(" | ")}]`,

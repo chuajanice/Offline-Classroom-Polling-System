@@ -44,6 +44,7 @@ model Instructor {
 
   classrooms           Classroom[]
   retakeAuthorizations RetakeAuthorization[]
+  sessions             InstructorSession[]
 
   @@map("instructors")
 }
@@ -217,4 +218,31 @@ model RetakeAuthorization {
 
   @@index([authorizedBy])
   @@map("retake_authorizations")
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2 supporting table: instructor_sessions
+//
+// Not one of the nine primary tables of the specification (section 4). It
+// exists because section 6 requires server-side sessions with random
+// identifiers and a logout that really invalidates them.
+//
+//  - Only a SHA-256 hash of the cookie token is stored, so a database leak does
+//    not leak usable sessions (same approach as participants.session_token_hash).
+//  - ON DELETE CASCADE: sessions are ephemeral, not history. Deleting an
+//    instructor (never done by the app) removes their sessions.
+// -----------------------------------------------------------------------------
+model InstructorSession {
+  id           Int      @id @default(autoincrement())
+  instructorId Int      @map("instructor_id")
+  /// SHA-256 (hex) of the random token held in the HttpOnly cookie.
+  tokenHash    String   @unique @map("token_hash") @db.Char(64)
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(0)
+  expiresAt    DateTime @map("expires_at") @db.DateTime(0)
+
+  instructor Instructor @relation(fields: [instructorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([instructorId])
+  @@index([expiresAt])
+  @@map("instructor_sessions")
 }
