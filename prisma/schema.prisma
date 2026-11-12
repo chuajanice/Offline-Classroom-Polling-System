@@ -85,6 +85,19 @@ model Activity {
   closedAt     DateTime?      @map("closed_at") @db.DateTime(0)
   createdAt    DateTime       @default(now()) @map("created_at") @db.DateTime(0)
 
+  // ---- Phase 3: activity builder (additive; see the phase3 migration) ----
+  /// Planned opening / closing times set by the instructor. Different from
+  /// opened_at / closed_at, which record when a live session actually ran.
+  scheduledOpensAt  DateTime? @map("scheduled_opens_at") @db.DateTime(0)
+  scheduledClosesAt DateTime? @map("scheduled_closes_at") @db.DateTime(0)
+  /// Optional time limit in minutes, checked by the participation phase later.
+  durationMinutes   Int?      @map("duration_minutes")
+  /// 1 = single attempt, 2 = one authorised retake (matches submissions.attempt_number).
+  maxAttempts       Int       @default(1) @map("max_attempts")
+  /// NULL = still a draft. Publishing does NOT open a session or issue a code.
+  publishedAt       DateTime? @map("published_at") @db.DateTime(0)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+
   classroom    Classroom     @relation(fields: [classroomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   questions    Question[]
   participants Participant[]
