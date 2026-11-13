@@ -16,7 +16,9 @@ type ClassroomRow = {
   _count: { activities: number };
 };
 
-const withCount = { _count: { select: { activities: true } } } as const;
+// Phase 6: the card count is the number of ACTIVE activities. Archived activities
+// keep their history but are not counted as current work.
+const withCount = { _count: { select: { activities: { where: { archivedAt: null } } } } } as const;
 
 export function toClassroomDto(row: ClassroomRow): ClassroomDto {
   return {

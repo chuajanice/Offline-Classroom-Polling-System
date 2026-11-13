@@ -6,6 +6,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { prisma } from "../src/lib/prisma";
+import { removeFixtures } from "./helpers/fixtures";
 import { AppError } from "../src/lib/errors";
 import {
   archiveClassroom,
@@ -17,6 +18,8 @@ import {
 import { createActivity } from "../src/services/activity.service";
 
 const run = randomBytes(4).toString("hex");
+/** Unique per file: parallel test files never delete each other's rows. */
+const PREFIX = "ph6-p3cls-";
 const isStatus = (status: number, code: string) => (e: unknown) =>
   e instanceof AppError && e.status === status && e.code === code;
 
@@ -24,19 +27,16 @@ let owner: number;
 let stranger: number;
 
 async function removeTestData() {
-  const where = { instructor: { email: { startsWith: "phase3-" } } };
-  await prisma.activity.deleteMany({ where: { classroom: where } });
-  await prisma.classroom.deleteMany({ where });
-  await prisma.instructor.deleteMany({ where: { email: { startsWith: "phase3-" } } });
+  await removeFixtures(PREFIX);
 }
 
 before(async () => {
   await removeTestData();
   owner = (await prisma.instructor.create({
-    data: { fullName: "Owner", email: `phase3-${run}-owner@example.test`, passwordHash: "not-used-in-tests" },
+    data: { fullName: "Owner", email: `${PREFIX}${run}-owner@example.test`, passwordHash: "not-used-in-tests" },
   })).id;
   stranger = (await prisma.instructor.create({
-    data: { fullName: "Stranger", email: `phase3-${run}-stranger@example.test`, passwordHash: "not-used-in-tests" },
+    data: { fullName: "Stranger", email: `${PREFIX}${run}-stranger@example.test`, passwordHash: "not-used-in-tests" },
   })).id;
 });
 

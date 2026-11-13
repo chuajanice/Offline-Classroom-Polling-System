@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { postJson } from "@/lib/post-json";
 
 export function LoginForm() {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -34,8 +32,15 @@ export function LoginForm() {
       setPending(false);
       return;
     }
-    router.replace("/dashboard");
-    router.refresh();
+    // Phase 6: a full page navigation does not depend on Next's client-side data
+    // fetch, which a mobile browser can fail on silently. The cookie is already set.
+    // If the browser does not leave this page, say so and let the user try again.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional full navigation (see the comment above)
+    window.location.href = "/dashboard";
+    window.setTimeout(() => {
+      setPending(false);
+      setError("Signed in, but the dashboard did not open. Tap Sign in again to continue.");
+    }, 8000);
   }
 
   return (

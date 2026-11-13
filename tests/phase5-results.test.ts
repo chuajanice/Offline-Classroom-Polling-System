@@ -5,6 +5,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { prisma } from "../src/lib/prisma";
+import { removeFixtures } from "./helpers/fixtures";
 import { AppError } from "../src/lib/errors";
 import type { ActivityInput } from "../src/lib/builder-validation";
 import { createClassroom } from "../src/services/classroom.service";
@@ -16,6 +17,8 @@ import { generateActivityReport } from "../src/services/report.service";
 import { extractPdfText, isPdf } from "./helpers/pdf-text";
 
 const run = randomBytes(4).toString("hex");
+/** Unique per file: parallel test files never delete each other's rows. */
+const PREFIX = "ph6-p5res-";
 const PUBLISH_NOW = new Date("2030-01-01T00:00:00Z");
 const OPEN_AT = new Date("2030-03-01T07:00:00Z");
 const WINDOW = new Date("2030-03-01T08:00:00Z");
@@ -64,21 +67,13 @@ const isStatus = (status: number, code: string) => (e: unknown) =>
   e instanceof AppError && e.status === status && e.code === code;
 
 async function removeTestData() {
-  const instructor = { email: { startsWith: "phase" } };
-  await prisma.attemptStart.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.submissionAnswer.deleteMany({ where: { submission: { participant: { activity: { classroom: { instructor } } } } } });
-  await prisma.submission.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.retakeAuthorization.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.participant.deleteMany({ where: { activity: { classroom: { instructor } } } });
-  await prisma.activity.deleteMany({ where: { classroom: { instructor } } });
-  await prisma.classroom.deleteMany({ where: { instructor } });
-  await prisma.instructor.deleteMany({ where: { email: { startsWith: "phase" } } });
+  await removeFixtures(PREFIX);
 }
 
 before(async () => {
   await removeTestData();
-  owner = (await prisma.instructor.create({ data: { fullName: "Ana Owner", email: `phase5-${run}-owner@example.test`, passwordHash: "x" } })).id;
-  other = (await prisma.instructor.create({ data: { fullName: "Ben Other", email: `phase5-${run}-other@example.test`, passwordHash: "x" } })).id;
+  owner = (await prisma.instructor.create({ data: { fullName: "Ana Owner", email: `${PREFIX}${run}-owner@example.test`, passwordHash: "x" } })).id;
+  other = (await prisma.instructor.create({ data: { fullName: "Ben Other", email: `${PREFIX}${run}-other@example.test`, passwordHash: "x" } })).id;
   room = (await createClassroom(owner, { classroomName: "Reporting room", description: "Section A" })).id;
 });
 

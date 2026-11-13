@@ -5,6 +5,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../src/lib/prisma";
+import { removeFixtures } from "./helpers/fixtures";
 import { AppError } from "../src/lib/errors";
 import type { ActivityInput } from "../src/lib/builder-validation";
 import { createClassroom } from "../src/services/classroom.service";
@@ -13,6 +14,8 @@ import { openActivity, closeActivity } from "../src/services/session.service";
 import { authenticateParticipant, getStudentActivity, joinActivity } from "../src/services/student.service";
 
 const run = randomBytes(4).toString("hex");
+/** Unique per file: parallel test files never delete each other's rows. */
+const PREFIX = "ph6-p4part-";
 const PUBLISH_NOW = new Date("2030-01-01T00:00:00Z");
 const BEFORE = new Date("2030-03-01T07:00:00Z");
 const AFTER_CLOSE = new Date("2030-03-01T10:00:00Z");
@@ -46,20 +49,12 @@ const isStatus = (status: number, code: string) => (e: unknown) =>
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 async function removeTestData() {
-  const instructor = { email: { startsWith: "phase" } };
-  await prisma.attemptStart.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.submissionAnswer.deleteMany({ where: { submission: { participant: { activity: { classroom: { instructor } } } } } });
-  await prisma.submission.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.retakeAuthorization.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.participant.deleteMany({ where: { activity: { classroom: { instructor } } } });
-  await prisma.activity.deleteMany({ where: { classroom: { instructor } } });
-  await prisma.classroom.deleteMany({ where: { instructor } });
-  await prisma.instructor.deleteMany({ where: { email: { startsWith: "phase" } } });
+  await removeFixtures(PREFIX);
 }
 
 before(async () => {
   await removeTestData();
-  owner = (await prisma.instructor.create({ data: { fullName: "Owner", email: `phase4-${run}@example.test`, passwordHash: "x" } })).id;
+  owner = (await prisma.instructor.create({ data: { fullName: "Owner", email: `${PREFIX}${run}@example.test`, passwordHash: "x" } })).id;
   room = (await createClassroom(owner, { classroomName: "Participation room", description: null })).id;
 });
 

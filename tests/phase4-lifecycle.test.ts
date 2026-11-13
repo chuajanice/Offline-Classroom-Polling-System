@@ -6,12 +6,15 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { prisma } from "../src/lib/prisma";
+import { removeFixtures } from "./helpers/fixtures";
 import { AppError } from "../src/lib/errors";
 import type { ActivityInput } from "../src/lib/builder-validation";
 import { createClassroom } from "../src/services/classroom.service";
 import { createActivity, deleteActivity, publishActivity, unpublishActivity, updateActivity } from "../src/services/activity.service";
 
 const run = randomBytes(4).toString("hex");
+/** Unique per file: parallel test files never delete each other's rows. */
+const PREFIX = "ph6-p4life-";
 const NOW = new Date("2030-01-01T00:00:00Z");
 let ownerId: number;
 let classroomId: number;
@@ -28,15 +31,7 @@ const input = (): ActivityInput => ({
 });
 
 async function removeTestData() {
-  const instructor = { email: { startsWith: "phase" } };
-  await prisma.attemptStart.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.submissionAnswer.deleteMany({ where: { submission: { participant: { activity: { classroom: { instructor } } } } } });
-  await prisma.submission.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.retakeAuthorization.deleteMany({ where: { participant: { activity: { classroom: { instructor } } } } });
-  await prisma.participant.deleteMany({ where: { activity: { classroom: { instructor } } } });
-  await prisma.activity.deleteMany({ where: { classroom: { instructor } } });
-  await prisma.classroom.deleteMany({ where: { instructor } });
-  await prisma.instructor.deleteMany({ where: { email: { startsWith: "phase" } } });
+  await removeFixtures(PREFIX);
 }
 
 /** Moves an activity to OPEN the way Stage B will: code, opened_at, status together. */
@@ -53,7 +48,7 @@ const isStatus = (status: number, code: string) => (e: unknown) =>
 before(async () => {
   await removeTestData();
   ownerId = (await prisma.instructor.create({
-    data: { fullName: "Lifecycle", email: `phase4-${run}@example.test`, passwordHash: "not-used-in-tests" },
+    data: { fullName: "Lifecycle", email: `${PREFIX}${run}@example.test`, passwordHash: "not-used-in-tests" },
   })).id;
   classroomId = (await createClassroom(ownerId, { classroomName: "Lifecycle room", description: null })).id;
 });

@@ -7,6 +7,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { prisma } from "../src/lib/prisma";
+import { removeFixtures } from "./helpers/fixtures";
 import { AppError } from "../src/lib/errors";
 import type { ActivityInput } from "../src/lib/builder-validation";
 import { createClassroom } from "../src/services/classroom.service";
@@ -17,6 +18,8 @@ import {
 } from "../src/services/activity.service";
 
 const run = randomBytes(4).toString("hex");
+/** Unique per file: parallel test files never delete each other's rows. */
+const PREFIX = "ph6-p3ops-";
 const NOW = new Date("2030-01-01T00:00:00Z");
 let ownerId: number;
 let classroomId: number;
@@ -44,16 +47,13 @@ const input = (questions: Q[], extra: Partial<ActivityInput> = {}): ActivityInpu
 });
 
 async function removeTestData() {
-  const where = { instructor: { email: { startsWith: "phase3-" } } };
-  await prisma.activity.deleteMany({ where: { classroom: where } });
-  await prisma.classroom.deleteMany({ where });
-  await prisma.instructor.deleteMany({ where: { email: { startsWith: "phase3-" } } });
+  await removeFixtures(PREFIX);
 }
 
 before(async () => {
   await removeTestData();
   ownerId = (await prisma.instructor.create({
-    data: { fullName: "Builder Ops", email: `phase3-${run}-ops@example.test`, passwordHash: "not-used-in-tests" },
+    data: { fullName: "Builder Ops", email: `${PREFIX}${run}-ops@example.test`, passwordHash: "not-used-in-tests" },
   })).id;
   classroomId = (await createClassroom(ownerId, { classroomName: "Ops room", description: null })).id;
 });
