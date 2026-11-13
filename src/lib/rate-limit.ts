@@ -57,3 +57,11 @@ export class FailedAttemptLimiter {
 const globalForLimiter = globalThis as unknown as { loginLimiter?: FailedAttemptLimiter };
 export const loginLimiter: FailedAttemptLimiter =
   globalForLimiter.loginLimiter ?? (globalForLimiter.loginLimiter = new FailedAttemptLimiter());
+
+// Phase 4: throttles INVALID session-code attempts. The key is global, not per
+// client: route handlers cannot see the client's address on this LAN deployment.
+// The 31^8 code space already makes guessing impractical; this limit makes it
+// fail fast. Only invalid codes count, so a correct code is never blocked.
+const globalForJoinLimiter = globalThis as unknown as { joinLimiter?: FailedAttemptLimiter };
+export const joinLimiter: FailedAttemptLimiter =
+  globalForJoinLimiter.joinLimiter ?? (globalForJoinLimiter.joinLimiter = new FailedAttemptLimiter(50, 10 * 60 * 1000));

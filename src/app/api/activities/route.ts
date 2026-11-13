@@ -12,14 +12,16 @@ const ACTIVITY_BODY_MAX_CHARS = 200_000;
 export async function GET(request: Request) {
   try {
     const instructor = await requireInstructorApi();
-    const raw = new URL(request.url).searchParams.get("classroomId");
+    const url = new URL(request.url);
+    const raw = url.searchParams.get("classroomId");
     let classroomId: number | undefined;
     if (raw !== null) {
       const parsed = toPositiveId(raw);
       if (parsed === null) throw new AppError(400, "VALIDATION_ERROR", "classroomId must be a number.");
       classroomId = parsed;
     }
-    return jsonOk({ activities: await listActivities(instructor.id, classroomId) });
+    const archived = url.searchParams.get("archived") === "true";
+    return jsonOk({ activities: await listActivities(instructor.id, classroomId, archived) });
   } catch (error) {
     return errorResponse(error);
   }

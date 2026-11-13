@@ -36,14 +36,30 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
           </div>
           <ActivityActions
             activityId={activity.id}
+            status={activity.status}
             isPublished={activity.isPublished}
+            isArchived={activity.archivedAt !== null}
+            classroomArchived={activity.classroomArchived}
             participantCount={activity.participantCount}
           />
         </div>
-        {activity.isPublished && (
+        {activity.status === "DRAFT" && activity.isPublished && (
           <p className="text-sm text-muted-foreground">
             Saving changes to a published activity returns it to draft, so you will need to publish it again.
           </p>
+        )}
+        {activity.archivedAt && (
+          <p className="rounded-lg bg-muted p-3 text-sm">
+            This activity is archived. It keeps its questions and history, and cannot accept sessions until restored.
+          </p>
+        )}
+        {activity.status === "OPEN" && activity.sessionCode && (
+          <div className="rounded-xl bg-linear-to-r from-orange-50 to-amber-50 p-4 ring-1 ring-orange-200">
+            <p className="text-sm text-muted-foreground">Session code (students join at /join)</p>
+            <p className="mt-1 font-mono text-3xl font-semibold tracking-[0.25em] text-orange-700" data-testid="session-code">
+              {activity.sessionCode}
+            </p>
+          </div>
         )}
       </div>
 
@@ -82,9 +98,11 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
           <h2 id="qs" className="text-lg font-semibold">
             Questions ({activity.questions.length})
           </h2>
-          <Link href={`/activities/${activity.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Edit questions
-          </Link>
+          {activity.status === "DRAFT" && !activity.archivedAt && (
+            <Link href={`/activities/${activity.id}/edit`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Edit questions
+            </Link>
+          )}
         </div>
         {activity.questions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No questions yet.</p>

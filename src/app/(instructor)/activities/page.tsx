@@ -33,10 +33,13 @@ export default async function ActivitiesPage({
           <h1 className="text-2xl font-semibold">Activities</h1>
           <p className="text-sm text-muted-foreground">Drafts and published activities across your classrooms.</p>
         </div>
+        <div className="flex gap-2">
+          <Link href="/activities/archived" className={buttonVariants({ variant: "outline" })}>Archived</Link>
         <Link href="/activities/new" className={buttonVariants({ className: CTA_CLASSES })}>
           <Plus data-icon="inline-start" aria-hidden="true" />
           New activity
         </Link>
+        </div>
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-2">

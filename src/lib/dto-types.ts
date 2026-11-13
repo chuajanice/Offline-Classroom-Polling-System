@@ -21,6 +21,13 @@ export type ActivitySummaryDto = {
   /** false = draft. Publishing never changes `status` in Phase 3. */
   isPublished: boolean;
   publishedAt: string | null;
+  /** Phase 4: archived activities keep their history and accept no sessions. */
+  archivedAt: string | null;
+  classroomArchived: boolean;
+  /** Set when the session opens; kept after closing. */
+  sessionCode: string | null;
+  openedAt: string | null;
+  closedAt: string | null;
   opensAt: string | null;
   closesAt: string | null;
   durationMinutes: number | null;

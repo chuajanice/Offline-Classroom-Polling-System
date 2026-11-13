@@ -168,11 +168,16 @@ const EXPECTED_UNIQUE_INDEXES = [
 // tables of the specification, so they are tolerated here (and verified when
 // present), while any other unexpected table / key / index still fails.
 // Phase 2: instructor_sessions (server-side login sessions).
-const SUPPORTING_TABLES = ["instructor_sessions"];
+// Phase 4: attempt_starts (time limit per attempt; one row per participant+attempt).
+const SUPPORTING_TABLES = ["instructor_sessions", "attempt_starts"];
 const SUPPORTING_FOREIGN_KEYS: Record<string, string> = {
   "instructor_sessions->instructors": "CASCADE",
+  "attempt_starts->participants": "RESTRICT",
 };
-const SUPPORTING_UNIQUE_INDEXES = ["instructor_sessions(token_hash)"];
+const SUPPORTING_UNIQUE_INDEXES = [
+  "instructor_sessions(token_hash)",
+  "attempt_starts(participant_id,attempt_number)",
+];
 
 const EXPECTED_CHECKS = [
   "chk_activities_lifecycle",

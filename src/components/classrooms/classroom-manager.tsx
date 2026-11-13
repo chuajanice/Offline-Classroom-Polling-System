@@ -46,12 +46,15 @@ export function ClassroomManager({ classrooms }: { classrooms: ClassroomDto[] })
           <h1 className="text-2xl font-semibold">Classrooms</h1>
           <p className="text-sm text-muted-foreground">Group your activities by class.</p>
         </div>
+        <div className="flex gap-2">
+          <Link href="/classrooms/archived" className={buttonVariants({ variant: "outline" })}>Archived</Link>
         {!creating && (
           <Button className={CTA_CLASSES} onClick={() => setCreating(true)}>
             <Plus data-icon="inline-start" aria-hidden="true" />
             New classroom
           </Button>
         )}
+        </div>
       </div>
 
       {creating && (

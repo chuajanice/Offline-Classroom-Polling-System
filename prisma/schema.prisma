@@ -97,6 +97,8 @@ model Activity {
   /// NULL = still a draft. Publishing does NOT open a session or issue a code.
   publishedAt       DateTime? @map("published_at") @db.DateTime(0)
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  /// Phase 4: NULL = active. Archived activities keep all history and accept no new sessions.
+  archivedAt        DateTime? @map("archived_at") @db.DateTime(0)
 
   classroom    Classroom     @relation(fields: [classroomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   questions    Question[]
@@ -161,10 +163,14 @@ model Participant {
   /// lives in the student's cookie, so a database leak does not leak sessions.
   sessionTokenHash String @unique @map("session_token_hash") @db.Char(64)
   joinedAt       DateTime @default(now()) @map("joined_at") @db.DateTime(0)
+  /// Phase 4: set when the instructor releases access (the old token stops working).
+  /// The same name may then rejoin and reclaim this participant, keeping all history.
+  accessReleasedAt DateTime? @map("access_released_at") @db.DateTime(0)
 
   activity            Activity             @relation(fields: [activityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   submissions         Submission[]
   retakeAuthorization RetakeAuthorization?
+  attemptStarts       AttemptStart[]
 
   // Also covers the activity_id FK.
   @@unique([activityId, normalizedName])
@@ -259,3 +265,18 @@ model InstructorSession {
   @@index([expiresAt])
   @@map("instructor_sessions")
 }
+
+/// Phase 4: when each attempt started, used for the optional time limit.
+/// Attempt 1 is recorded when the student first opens the questions; attempt 2
+/// when the student starts the authorised retake. Historical, never edited.
+model AttemptStart {
+  id            Int         @id @default(autoincrement())
+  participantId Int         @map("participant_id")
+  attemptNumber Int         @map("attempt_number")
+  startedAt     DateTime    @map("started_at") @db.DateTime(0)
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([participantId, attemptNumber])
+  @@map("attempt_starts")
+}
+

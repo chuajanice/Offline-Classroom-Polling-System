@@ -86,17 +86,45 @@ export async function updateClassroom(
   return toClassroomDto(row);
 }
 
+/** Archived classrooms, most recently archived first. */
+export async function listArchivedClassrooms(instructorId: number): Promise<ClassroomDto[]> {
+  const rows = await prisma.classroom.findMany({
+    where: { instructorId, archivedAt: { not: null } },
+    orderBy: [{ archivedAt: "desc" }, { id: "desc" }],
+    include: withCount,
+  });
+  return rows.map(toClassroomDto);
+}
+
 /**
- * "Delete" for classrooms. Classrooms are archived, never hard-deleted, because
- * activities and their history reference them (see the schema notes). Archived
- * classrooms keep their activities but disappear from the active list and can
- * no longer receive new activities.
+ * Archives a classroom. Classrooms are never hard-deleted, because activities
+ * and their history reference them. Any OPEN activity in the classroom is
+ * closed in the same transaction, so no students can keep joining a hidden
+ * classroom. Activities are kept and can be reached again after a restore.
  */
-export async function archiveClassroom(instructorId: number, id: number): Promise<ClassroomDto> {
-  const existing = await findOwned(instructorId, id);
+export async function archiveClassroom(instructorId: number, id: number, now: Date = new Date()): Promise<ClassroomDto> {
+  const wholeSecond = new Date(Math.floor(now.getTime() / 1000) * 1000);
+  const row = await prisma.$transaction(async (tx) => {
+    const existing = await tx.classroom.findFirst({ where: { id, instructorId }, select: { id: true, archivedAt: true } });
+    if (!existing) throw new AppError(404, "NOT_FOUND", "We could not find that classroom.");
+    if (!existing.archivedAt) {
+      await tx.activity.updateMany({
+        where: { classroomId: id, status: "OPEN" },
+        data: { status: "CLOSED", closedAt: wholeSecond },
+      });
+      await tx.classroom.update({ where: { id }, data: { archivedAt: wholeSecond } });
+    }
+    return tx.classroom.findFirstOrThrow({ where: { id }, include: withCount });
+  });
+  return toClassroomDto(row);
+}
+
+/** Restores an archived classroom. Its activities are not reopened automatically. */
+export async function restoreClassroom(instructorId: number, id: number): Promise<ClassroomDto> {
+  await findOwned(instructorId, id);
   const row = await prisma.classroom.update({
     where: { id },
-    data: { archivedAt: existing.archivedAt ?? new Date() },
+    data: { archivedAt: null },
     include: withCount,
   });
   return toClassroomDto(row);

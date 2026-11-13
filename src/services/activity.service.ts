@@ -18,6 +18,7 @@ import {
   type FieldErrors,
 } from "@/lib/activity-rules";
 import type { ActivityInput } from "@/lib/builder-validation";
+import { closeIfDeadlinePassed } from "./lifecycle";
 import type {
   ActivityDetailDto,
   ActivityStatusDto,
@@ -32,7 +33,11 @@ type SummaryRow = {
   classroomId: number;
   title: string;
   status: ActivityStatusDto;
+  archivedAt: Date | null;
   publishedAt: Date | null;
+  sessionCode: string | null;
+  openedAt: Date | null;
+  closedAt: Date | null;
   scheduledOpensAt: Date | null;
   scheduledClosesAt: Date | null;
   durationMinutes: number | null;
@@ -89,6 +94,11 @@ export function toSummary(row: SummaryRow): ActivitySummaryDto {
     status: row.status,
     isPublished: row.publishedAt !== null,
     publishedAt: iso(row.publishedAt),
+    archivedAt: iso(row.archivedAt),
+    classroomArchived: row.classroom.archivedAt !== null,
+    sessionCode: row.sessionCode,
+    openedAt: iso(row.openedAt),
+    closedAt: iso(row.closedAt),
     opensAt: iso(row.scheduledOpensAt),
     closesAt: iso(row.scheduledClosesAt),
     durationMinutes: row.durationMinutes,
@@ -123,6 +133,16 @@ export function toDetail(row: DetailRow): ActivityDetailDto {
 // ---- ownership helpers -----------------------------------------------------
 
 const notFoundActivity = () => new AppError(404, "NOT_FOUND", "We could not find that activity.");
+
+/** Phase 4 rule: once an activity has opened, its content is frozen (master prompt 4.3). */
+function assertDraftEditable(status: string, archivedAt: Date | null): void {
+  if (archivedAt) {
+    throw new AppError(409, "ACTIVITY_ARCHIVED", "Archived activities cannot be changed. Restore them first.");
+  }
+  if (status !== "DRAFT") {
+    throw new AppError(409, "ACTIVITY_OPENED", "Opened activities cannot be edited. Close or archive the activity instead.");
+  }
+}
 
 async function loadOwnedActivity(instructorId: number, id: number): Promise<DetailRow> {
   const row = await prisma.activity.findFirst({
@@ -185,10 +205,12 @@ function questionCreateData(questions: ActivityInput["questions"]) {
 export async function listActivities(
   instructorId: number,
   classroomId?: number,
+  archived = false,
 ): Promise<ActivitySummaryDto[]> {
   const rows = await prisma.activity.findMany({
     where: {
       classroom: { instructorId },
+      archivedAt: archived ? { not: null } : null,
       ...(classroomId !== undefined ? { classroomId } : {}),
     },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
@@ -198,6 +220,8 @@ export async function listActivities(
 }
 
 export async function getActivity(instructorId: number, id: number): Promise<ActivityDetailDto> {
+  await loadOwnedActivity(instructorId, id); // ownership check first
+  await closeIfDeadlinePassed(id);
   return toDetail(await loadOwnedActivity(instructorId, id));
 }
 
@@ -243,6 +267,7 @@ export async function updateActivity(
       include: { _count: { select: { participants: true } } },
     });
     if (!existing) throw notFoundActivity();
+    assertDraftEditable(existing.status, existing.archivedAt);
     if (existing._count.participants > 0) {
       throw new AppError(
         409,
@@ -284,11 +309,18 @@ export async function deleteActivity(instructorId: number, id: number): Promise<
     include: { _count: { select: { participants: true } } },
   });
   if (!existing) throw notFoundActivity();
+  if (existing.status !== "DRAFT") {
+    throw new AppError(
+      409,
+      "ACTIVITY_NOT_DRAFT",
+      "Opened or closed activities cannot be deleted. Archive them instead to keep their history.",
+    );
+  }
   if (existing._count.participants > 0) {
     throw new AppError(
       409,
       "ACTIVITY_IN_USE",
-      "This activity has student records and cannot be deleted.",
+      "This activity has student records and cannot be deleted. Archive it instead.",
     );
   }
   await prisma.activity.delete({ where: { id } });
@@ -304,7 +336,13 @@ export async function publishActivity(
   now: Date = new Date(),
 ): Promise<ActivityDetailDto> {
   const row = await loadOwnedActivity(instructorId, id);
-  if (row.publishedAt) return toDetail(row);
+  if (row.publishedAt && row.status === "DRAFT" && !row.archivedAt) return toDetail(row);
+  if (row.status !== "DRAFT") {
+    throw new AppError(409, "ACTIVITY_OPENED", "Opened activities cannot be republished. Publishing is only for drafts.");
+  }
+  if (row.archivedAt) {
+    throw new AppError(409, "ACTIVITY_ARCHIVED", "Archived activities cannot be published. Restore them first.");
+  }
 
   const problems = publishProblems({
     title: row.title,
@@ -334,7 +372,8 @@ export async function publishActivity(
 }
 
 export async function unpublishActivity(instructorId: number, id: number): Promise<ActivityDetailDto> {
-  await loadOwnedActivity(instructorId, id);
+  const row = await loadOwnedActivity(instructorId, id);
+  assertDraftEditable(row.status, row.archivedAt);
   await prisma.activity.update({ where: { id }, data: { publishedAt: null } });
   return getActivity(instructorId, id);
 }
@@ -342,12 +381,12 @@ export async function unpublishActivity(instructorId: number, id: number): Promi
 export async function getDashboardStats(instructorId: number) {
   const [classrooms, activities, published, recent] = await Promise.all([
     prisma.classroom.count({ where: { instructorId, archivedAt: null } }),
-    prisma.activity.count({ where: { classroom: { instructorId } } }),
+    prisma.activity.count({ where: { classroom: { instructorId }, archivedAt: null } }),
     prisma.activity.count({
-      where: { classroom: { instructorId }, publishedAt: { not: null } },
+      where: { classroom: { instructorId }, archivedAt: null, publishedAt: { not: null } },
     }),
     prisma.activity.findMany({
-      where: { classroom: { instructorId } },
+      where: { classroom: { instructorId }, archivedAt: null },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: 5,
       include: summaryInclude,

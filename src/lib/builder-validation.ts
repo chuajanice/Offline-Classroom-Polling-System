@@ -121,3 +121,25 @@ export function parseDottedOrThrow<S extends z.ZodType>(schema: S, data: unknown
   }
   throw new AppError(400, "VALIDATION_ERROR", "Please correct the highlighted fields.", { fields });
 }
+
+// ---- student requests (Phase 4) -------------------------------------------
+
+/** Lengths only here. The name rules and code format are checked in the service layer. */
+export const joinInputSchema = z.object({
+  sessionCode: z.string().max(40, "Enter the session code."),
+  fullName: z.string().max(200, "Your name is too long."),
+});
+export type JoinInput = z.output<typeof joinInputSchema>;
+
+/** A student's answers. Unanswered questions are simply omitted (they score zero). */
+export const submissionInputSchema = z.object({
+  answers: z
+    .array(
+      z.object({
+        questionId: z.number().int().positive("Invalid question."),
+        choiceId: z.number().int().positive("Invalid answer."),
+      }),
+    )
+    .max(ACTIVITY_LIMITS.QUESTIONS_MAX, "Too many answers."),
+});
+export type SubmissionInput = z.output<typeof submissionInputSchema>;
