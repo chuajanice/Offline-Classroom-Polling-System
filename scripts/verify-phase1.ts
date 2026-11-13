@@ -410,6 +410,7 @@ async function verifyBehaviour(run: string) {
         participantId,
         attemptNumber: 1,
         score: "2.00",
+        maxScore: "10.00",
         answers: {
           create: [
             { questionId: q1Id, selectedChoiceId: q1Correct.id, isCorrect: true, awardedPoints: "2.00" },
@@ -439,6 +440,7 @@ async function verifyBehaviour(run: string) {
           participantId,
           attemptNumber: 2,
           score: "3.00",
+          maxScore: "10.00",
           answers: {
             create: [
               { questionId: q1Id, selectedChoiceId: q1Correct.id, isCorrect: true, awardedPoints: "2.00" },
@@ -550,7 +552,7 @@ async function verifyBehaviour(run: string) {
     }),
   );
   await expectRejected("second attempt_number 1 for the same participant", UNIQUE, () =>
-    prisma.submission.create({ data: { participantId, attemptNumber: 1, score: "0.00" } }),
+    prisma.submission.create({ data: { participantId, attemptNumber: 1, score: "0.00", maxScore: "10.00" } }),
   );
   await expectRejected("two answers to one question in one submission", UNIQUE, () =>
     prisma.submissionAnswer.create({
@@ -575,10 +577,10 @@ async function verifyBehaviour(run: string) {
 
   // CHECK constraints
   await expectRejected("attempt_number 3 (only 1 and 2 are allowed)", CHECK, () =>
-    prisma.submission.create({ data: { participantId: participant2Id, attemptNumber: 3, score: "0.00" } }),
+    prisma.submission.create({ data: { participantId: participant2Id, attemptNumber: 3, score: "0.00", maxScore: "10.00" } }),
   );
   await expectRejected("negative submission score", CHECK, () =>
-    prisma.submission.create({ data: { participantId: participant2Id, attemptNumber: 1, score: "-1.00" } }),
+    prisma.submission.create({ data: { participantId: participant2Id, attemptNumber: 1, score: "-1.00", maxScore: "10.00" } }),
   );
   await expectRejected("question with 0 points", CHECK, () =>
     prisma.question.create({ data: { activityId, questionText: "zero", points: 0, position: 99 } }),
@@ -601,7 +603,7 @@ async function verifyBehaviour(run: string) {
 
   // Foreign keys / orphans
   await expectRejected("submission for a participant that does not exist", FOREIGN_KEY, () =>
-    prisma.submission.create({ data: { participantId: 2147483647, attemptNumber: 1, score: "0.00" } }),
+    prisma.submission.create({ data: { participantId: 2147483647, attemptNumber: 1, score: "0.00", maxScore: "10.00" } }),
   );
 
   // Use a fresh submission so the unique (submissionId, questionId)
@@ -611,6 +613,7 @@ async function verifyBehaviour(run: string) {
       participantId: participant2Id,
       attemptNumber: 1,
       score: "0.00",
+      maxScore: "10.00",
     },
   });
 
@@ -660,7 +663,7 @@ async function verifyBehaviour(run: string) {
     try {
       await prisma.$transaction(async (tx) => {
         const s = await tx.submission.create({
-          data: { participantId: participant2Id, attemptNumber: 1, score: "2.00" },
+          data: { participantId: participant2Id, attemptNumber: 1, score: "2.00", maxScore: "10.00" },
         });
         await tx.submissionAnswer.create({
           data: { submissionId: s.id, questionId: q1Id, selectedChoiceId: q1Choices[1].id, isCorrect: true, awardedPoints: "2.00" },

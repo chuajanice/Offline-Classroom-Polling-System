@@ -193,6 +193,7 @@ export async function submitAnswers(
         participantId: participant.id,
         attemptNumber: plan.attemptNumber,
         score: scored.score,
+        maxScore: scored.maxScore,
         submittedAt: wholeSecond(now),
       },
       select: { id: true, submittedAt: true },
@@ -294,15 +295,15 @@ export async function getStudentActivity(activityId: number, token: string | und
     prisma.submission.findMany({
       where: { participantId: participant.id },
       orderBy: { attemptNumber: "asc" },
-      select: { attemptNumber: true, score: true, submittedAt: true, answers: { select: { questionId: true } } },
+      select: { attemptNumber: true, score: true, maxScore: true, submittedAt: true },
     }),
     prisma.retakeAuthorization.findUnique({ where: { participantId: participant.id }, select: { usedAt: true } }),
   ]);
   if (!row) throw UNAUTHENTICATED();
 
-  const maxScore = row.questions.reduce((sum, q) => sum + q.points, 0);
   const results: ResultDto[] = submissions.map((s) => {
     const score = Number(s.score.toString());
+    const maxScore = Number(s.maxScore.toString());
     return {
       attemptNumber: s.attemptNumber,
       score,

@@ -187,6 +187,9 @@ model Submission {
   attemptNumber Int      @map("attempt_number")
   /// Historical result of this attempt. Never recomputed.
   score         Decimal  @db.Decimal(8, 2)
+  /// Phase 5: the maximum this attempt was marked against (sum of points at submission time).
+  /// Stored so that percentages stay historical even if questions change later.
+  maxScore      Decimal  @map("max_score") @db.Decimal(8, 2)
   submittedAt   DateTime @default(now()) @map("submitted_at") @db.DateTime(0)
 
   participant Participant        @relation(fields: [participantId], references: [id], onDelete: Restrict, onUpdate: Cascade)

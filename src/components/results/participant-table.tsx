@@ -1,15 +1,18 @@
 "use client";
 
-// Participant rows with the instructor's actions: authorise the single retake, release access.
+// Participant rows: name, submission status, attempt 1 and attempt 2 kept side by side,
+// the current result, and the instructor's actions (authorise retake, release access).
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import { useRouter } from "next/navigation";
 import { formatDateTime } from "@/lib/format";
 import { requestJson } from "@/lib/request-json";
+import { SUBMISSION_STATUS_LABEL } from "@/lib/results-rules";
 import type { ParticipantResultDto } from "@/services/results.service";
+import type { AttemptResult } from "@/lib/results-rules";
 
 export function ParticipantTable({
   activityId,
@@ -43,65 +46,64 @@ export function ParticipantTable({
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b text-left text-muted-foreground">
             <tr>
-              <th className="py-2 pr-4 font-medium">Name</th>
-              <th className="py-2 pr-4 font-medium">Joined</th>
-              <th className="py-2 pr-4 font-medium">Attempts</th>
-              <th className="py-2 pr-4 font-medium">Retake</th>
+              <th className="py-2 pr-3 font-medium">Name</th>
+              <th className="py-2 pr-3 font-medium">Status</th>
+              <th className="py-2 pr-3 font-medium">Attempt 1</th>
+              <th className="py-2 pr-3 font-medium">Attempt 2</th>
+              <th className="py-2 pr-3 font-medium">Current result</th>
               <th className="py-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {participants.map((p) => (
-              <tr key={p.participantId} className="border-b last:border-0 align-top">
-                <td className="py-3 pr-4 font-medium">
-                  {p.displayName}
-                  {p.accessReleasedAt && <Badge variant="outline" className="ml-2">Access released</Badge>}
-                </td>
-                <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(p.joinedAt)}</td>
-                <td className="py-3 pr-4">
-                  {p.attempts.length === 0 ? (
-                    <span className="text-muted-foreground">Not submitted</span>
-                  ) : (
-                    <ul className="space-y-1">
-                      {p.attempts.map((a) => (
-                        <li key={a.attemptNumber} className="tabular-nums">
-                          Attempt {a.attemptNumber}: {a.score}/{a.maxScore} ({a.percentage}%)
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </td>
-                <td className="py-3 pr-4">
-                  {p.retake.status === "none" && <span className="text-muted-foreground">—</span>}
-                  {p.retake.status === "authorized" && <Badge variant="default">Authorised, not used</Badge>}
-                  {p.retake.status === "used" && <Badge variant="outline">Used</Badge>}
-                </td>
-                <td className="py-3">
-                  <div className="flex flex-wrap gap-2">
-                    {p.canAuthorizeRetake && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId !== null}
-                        onClick={() =>
-                          act(p, `/api/activities/${activityId}/participants/${p.participantId}/retake`, "Retake authorised")
-                        }
-                      >
-                        Authorise retake
-                      </Button>
+            {participants.map((p) => {
+              const first = p.attempts.find((a) => a.attemptNumber === 1);
+              const second = p.attempts.find((a) => a.attemptNumber === 2);
+              return (
+                <tr key={p.participantId} className="border-b last:border-0 align-top">
+                  <td className="py-3 pr-3 font-medium">
+                    {p.displayName}
+                    {p.accessReleasedAt && <Badge variant="outline" className="ml-2">Access released</Badge>}
+                    <div className="text-xs font-normal text-muted-foreground">Joined {formatDateTime(p.joinedAt)}</div>
+                  </td>
+                  <td className="py-3 pr-3">{SUBMISSION_STATUS_LABEL[p.submissionStatus]}</td>
+                  <td className="py-3 pr-3"><AttemptCell attempt={first} /></td>
+                  <td className="py-3 pr-3"><AttemptCell attempt={second} /></td>
+                  <td className="py-3 pr-3">
+                    {p.currentResult ? (
+                      <div className="tabular-nums">
+                        <span className="font-semibold">{p.currentResult.percentage}%</span>
+                        <span className="text-muted-foreground"> · attempt {p.currentResult.attemptNumber}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">No result yet</span>
                     )}
-                    {p.canReleaseAccess && (
-                      <Button size="sm" variant="ghost" disabled={busyId !== null} onClick={() => setReleasing(p)}>
-                        Release access
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {p.canAuthorizeRetake && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId !== null}
+                          onClick={() => act(p, `/api/activities/${activityId}/participants/${p.participantId}/retake`, "Retake authorised")}
+                        >
+                          Authorise retake
+                        </Button>
+                      )}
+                      {p.retake.status === "used" && <Badge variant="outline">Retake used</Badge>}
+                      {p.canReleaseAccess && (
+                        <Button size="sm" variant="ghost" disabled={busyId !== null} onClick={() => setReleasing(p)}>
+                          Release access
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -119,5 +121,17 @@ export function ParticipantTable({
         }
       />
     </>
+  );
+}
+
+function AttemptCell({ attempt }: { attempt: AttemptResult | undefined }) {
+  if (!attempt) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="tabular-nums">
+      <div>
+        {attempt.score} / {attempt.maxScore} <span className="text-muted-foreground">({attempt.percentage}%)</span>
+      </div>
+      <div className="text-xs text-muted-foreground">{formatDateTime(attempt.submittedAt)}</div>
+    </div>
   );
 }
