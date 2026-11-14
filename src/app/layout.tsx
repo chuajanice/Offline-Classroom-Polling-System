@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SilkBackground } from "@/components/background/silk-background";
 import { AppearanceProvider } from "@/components/theme/theme-provider";
+import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="relative isolate flex min-h-full flex-col">
         <AppearanceProvider>
+          <ServiceWorkerRegister />
           <SilkBackground />
           {children}
         </AppearanceProvider>

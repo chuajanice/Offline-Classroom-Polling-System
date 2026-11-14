@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+//import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
 import { requireInstructor } from "@/lib/session";
@@ -9,6 +10,7 @@ import { listActivities } from "@/services/activity.service";
 import { listClassrooms } from "@/services/classroom.service";
 import { toPositiveId } from "@/lib/builder-validation";
 import { Plus } from "lucide-react";
+import { ClassroomFilter } from "@/components/activities/classroom-filter";
 
 export const metadata = { title: "Activities" };
 
@@ -42,29 +44,10 @@ export default async function ActivitiesPage({
         </div>
       </div>
 
-      <form method="get" className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1">
-          <label htmlFor="classroomId" className="text-sm font-medium">
-            Classroom
-          </label>
-          <select
-            id="classroomId"
-            name="classroomId"
-            defaultValue={filterId ? String(filterId) : ""}
-            className="flex h-8 min-w-48 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="">All classrooms</option>
-            {classrooms.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.classroomName}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button type="submit" variant="outline">
-          Filter
-        </Button>
-      </form>
+      <ClassroomFilter
+        classrooms={classrooms}
+        initialValue={filterId ? String(filterId) : ""}
+      />
 
       {activities.length === 0 ? (
         <Card>
