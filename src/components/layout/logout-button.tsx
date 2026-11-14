@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { postJson } from "@/lib/post-json";
 
@@ -31,8 +32,9 @@ export function LogoutButton() {
           Could not log out. Try again.
         </span>
       )}
-      <Button variant="outline" size="sm" onClick={logout} disabled={pending}>
-        {pending ? "Logging out…" : "Log out"}
+      <Button variant="outline" size="sm" onClick={logout} disabled={pending} className="px-2 sm:px-2.5">
+        <LogOut aria-hidden="true" />
+        <span className="sr-only sm:not-sr-only">{pending ? "Logging out…" : "Log out"}</span>
       </Button>
     </div>
   );

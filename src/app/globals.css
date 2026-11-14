@@ -7,8 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -46,85 +46,170 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-raised: var(--raised-shadow);
+  --shadow-accent: var(--accent-shadow);
 }
 
+/*
+ * Pollify design tokens. Every colour in the interface comes from these
+ * variables, so light and dark mode stay consistent across all pages.
+ * Light: soft blue-grey surfaces, indigo accent. Dark: near-black, warm orange accent.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  color-scheme: light;
+  --background: #e9edf4;
+  --foreground: #303541;
+  --card: rgba(255, 255, 255, 0.62);
+  --card-foreground: #303541;
+  --popover: #f4f6fa;
+  --popover-foreground: #303541;
+  --primary: #526bce;
+  --primary-foreground: #ffffff;
+  --secondary: #dde3ee;
+  --secondary-foreground: #303541;
+  --muted: #dce2ec;
+  /* Darkened from the brief's #858B99 so secondary text meets WCAG AA on the light background. */
+  --muted-foreground: #5e6575;
+  --accent: #dce2ec;
+  --accent-foreground: #303541;
+  --destructive: #b42335;
+  --border: rgba(48, 53, 65, 0.12);
+  --input: rgba(48, 53, 65, 0.18);
+  --ring: #526bce;
+  --chart-1: #526bce;
+  --chart-2: #8c9ad8;
+  --chart-3: #b3bde6;
+  --chart-4: #5e6575;
+  --chart-5: #303541;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: rgba(255, 255, 255, 0.55);
+  --sidebar-foreground: #303541;
+  --sidebar-primary: #526bce;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dce2ec;
+  --sidebar-accent-foreground: #303541;
+  --sidebar-border: rgba(48, 53, 65, 0.12);
+  --sidebar-ring: #526bce;
+  --raised-shadow: 6px 6px 14px rgba(160, 169, 186, 0.4), -6px -6px 14px rgba(255, 255, 255, 0.85);
+  --accent-shadow: 0 6px 16px -8px rgba(82, 107, 206, 0.6);
+  --silk-strong: #e0893a;
+  --silk-soft: #f2b47a;
+  --smoke-a: rgba(246, 175, 110, 0.24);
+  --smoke-b: rgba(255, 214, 170, 0.32);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  color-scheme: dark;
+  --background: #050507;
+  --foreground: #f4eee9;
+  --card: rgba(255, 255, 255, 0.035);
+  --card-foreground: #f4eee9;
+  --popover: #0c0c10;
+  --popover-foreground: #f4eee9;
+  --primary: #ffad62;
+  --primary-foreground: #050507;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #f4eee9;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #a29ba0;
+  --accent: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #f4eee9;
+  --destructive: #f87171;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #ffad62;
+  --chart-1: #ffad62;
+  --chart-2: #c9642a;
+  --chart-3: #8a5a3c;
+  --chart-4: #a29ba0;
+  --chart-5: #f4eee9;
+  --sidebar: rgba(255, 255, 255, 0.025);
+  --sidebar-foreground: #f4eee9;
+  --sidebar-primary: #ffad62;
+  --sidebar-primary-foreground: #050507;
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #f4eee9;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+  --sidebar-ring: #ffad62;
+  --raised-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 24px -14px rgba(0, 0, 0, 0.8);
+  --accent-shadow: 0 6px 18px -8px rgba(255, 173, 98, 0.45);
+  --silk-strong: #ffad62;
+  --silk-soft: #c9642a;
+  --smoke-a: rgba(255, 140, 60, 0.12);
+  --smoke-b: rgba(255, 173, 98, 0.06);
+}
+
+/* Silky ambient background. Decorative only: it never receives pointer events. */
+.silk-strand {
+  fill: none;
+  stroke: var(--silk-strong);
+}
+
+.silk-strand--soft {
+  stroke: var(--silk-soft);
+}
+
+.silk-smoke {
+  background:
+    radial-gradient(60% 45% at 18% 12%, var(--smoke-a), transparent 70%),
+    radial-gradient(50% 40% at 88% 92%, var(--smoke-b), transparent 72%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
+  }
+}
+
+/* Stable decorative background height across mobile browsers. */
+.silk-background-viewport {
+  height: 100vh;
+}
+
+@supports (height: 100svh) {
+  .silk-background-viewport {
+    height: 100svh;
+  }
+}
+
+/* Keep the decorative background fixed while page content scrolls. */
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  position: relative;
+}
+
+/* Hide scrollbar visually without disabling scrolling. */
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Stable minimum viewport height across devices. */
+.app-viewport {
+  min-height: 100vh;
+}
+
+@supports (min-height: 100svh) {
+  .app-viewport {
+    min-height: 100svh;
   }
 }

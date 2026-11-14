@@ -105,7 +105,7 @@ export function StudentActivity({ view }: { view: StudentActivityDto }) {
                   {q.choices.map((c) => (
                     <label
                       key={c.id}
-                      className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border bg-background p-3 has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50"
+                      className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border bg-background p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/10"
                     >
                       <input
                         type="radio"
@@ -113,7 +113,7 @@ export function StudentActivity({ view }: { view: StudentActivityDto }) {
                         value={c.id}
                         checked={answers[q.id] === c.id}
                         onChange={() => setAnswers((a) => ({ ...a, [q.id]: c.id }))}
-                        className="size-5 shrink-0 accent-orange-500"
+                        className="size-5 shrink-0 accent-primary"
                       />
                       <span className="text-sm">{c.choiceText}</span>
                     </label>

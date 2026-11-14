@@ -452,7 +452,7 @@ export function ActivityBuilder({
                         checked={choice.isCorrect}
                         onChange={() => markCorrect(qi, ci)}
                         aria-label={`Choice ${ci + 1} is the correct answer`}
-                        className="size-4 shrink-0 accent-orange-500"
+                        className="size-4 shrink-0 accent-primary"
                         disabled={busy}
                       />
                       <Input

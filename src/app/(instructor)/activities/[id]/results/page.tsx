@@ -10,6 +10,7 @@ import { AutoRefresh } from "@/components/results/auto-refresh";
 import { toPositiveId } from "@/lib/builder-validation";
 import { formatDateTime } from "@/lib/format";
 import { orNotFound } from "@/lib/page-helpers";
+import { CTA_CLASSES } from "@/lib/ui-classes";
 import { requireInstructor } from "@/lib/session";
 import { getActivityResults } from "@/services/results.service";
 
@@ -49,7 +50,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
           <a
             href={`/api/activities/${data.activity.id}/report`}
             download
-            className={buttonVariants({ className: "border-transparent bg-linear-to-r from-orange-500 to-amber-500 text-white" })}
+            className={buttonVariants({ className: CTA_CLASSES })}
           >
             Download PDF report
           </a>

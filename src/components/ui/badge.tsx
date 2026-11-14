@@ -8,7 +8,7 @@ const badgeVariants = cva(
       variant: {
         default: "bg-primary/10 text-primary",
         draft: "bg-muted text-muted-foreground",
-        published: "bg-orange-100 text-orange-800 ring-1 ring-orange-300/60",
+        published: "bg-primary/12 text-primary ring-1 ring-primary/30",
         outline: "border text-foreground",
       },
     },

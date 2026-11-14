@@ -77,7 +77,7 @@ export function ClassroomManager({ classrooms }: { classrooms: ClassroomDto[] })
       {classrooms.length === 0 && !creating ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-            <BookOpen className="size-10 text-orange-500" aria-hidden="true" />
+            <BookOpen className="size-10 text-primary" aria-hidden="true" />
             <p className="font-medium">No classrooms yet</p>
             <p className="max-w-sm text-sm text-muted-foreground">
               Create a classroom first. Activities are organised under classrooms.

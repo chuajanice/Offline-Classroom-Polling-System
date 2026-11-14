@@ -99,7 +99,7 @@ export default async function ActivitiesPage({
             </thead>
             <tbody>
               {activities.map((activity) => (
-                <tr key={activity.id} className="border-b last:border-0 hover:bg-orange-50/60">
+                <tr key={activity.id} className="border-b last:border-0 hover:bg-muted/50">
                   <td className="px-4 py-3">
                     <Link href={`/activities/${activity.id}`} className="font-medium hover:underline">
                       {activity.title}

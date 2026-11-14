@@ -9,6 +9,7 @@ import { orNotFound } from "@/lib/page-helpers";
 import { requireInstructor } from "@/lib/session";
 import { getActivity } from "@/services/activity.service";
 import { notFound } from "next/navigation";
+import { ChevronLeft, CircleCheck } from "lucide-react";
 
 export const metadata = { title: "Activity" };
 
@@ -21,8 +22,9 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Link href="/activities" className="text-sm text-muted-foreground hover:underline">
-          ← All activities
+        <Link href="/activities" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline">
+          <ChevronLeft aria-hidden="true" className="size-4" />
+          All activities
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -54,9 +56,9 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
           </p>
         )}
         {activity.status === "OPEN" && activity.sessionCode && (
-          <div className="rounded-xl bg-linear-to-r from-orange-50 to-amber-50 p-4 ring-1 ring-orange-200">
+          <div className="rounded-xl bg-primary/10 p-4 ring-1 ring-primary/30">
             <p className="text-sm text-muted-foreground">Session code (students join at /join)</p>
-            <p className="mt-1 font-mono text-3xl font-semibold tracking-[0.25em] text-orange-700" data-testid="session-code">
+            <p className="mt-1 font-mono text-3xl font-semibold tracking-[0.25em] text-primary" data-testid="session-code">
               {activity.sessionCode}
             </p>
           </div>
@@ -120,7 +122,12 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
                   {q.choices.map((c) => (
                     <li key={c.id} className={c.isCorrect ? "font-medium text-emerald-700" : "text-muted-foreground"}>
                       {String.fromCharCode(64 + c.position)}. {c.choiceText || <em>(empty)</em>}
-                      {c.isCorrect && " ✓ correct answer"}
+                      {c.isCorrect && (
+                        <span className="ml-2 inline-flex items-center gap-1 align-middle text-xs">
+                          <CircleCheck aria-hidden="true" className="size-3.5" />
+                          correct answer
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
