@@ -18,6 +18,7 @@ import { isWellFormedSessionCode, normalizeSessionCode } from "@/lib/session-cod
 import type { JoinInput, SubmissionInput } from "@/lib/builder-validation";
 import { closeIfDeadlinePassed } from "./lifecycle";
 import { attemptDeadline, planAttempt, scoreAnswers } from "@/lib/attempt-rules";
+import { decideExit, type ExitEvent, type ExitOutcome } from "@/lib/exit-rules";
 
 const INVALID_CODE_MESSAGE = "We could not find an activity with that session code. Check the code and try again.";
 const CLOSED_MESSAGE = "This activity is no longer accepting participants.";
@@ -297,6 +298,10 @@ export type StudentActivityDto = {
     deadline: string | null;
   };
   results: ResultDto[];
+  /** Stage 3. "pending": the student must answer the exit warning. "stayed": NO was chosen on this attempt. */
+  exitWarning: "none" | "pending" | "stayed";
+  /** Attempt numbers that were automatically scored zero because the student left the activity. */
+  zeroedAttempts: number[];
   /** Empty unless the attempt is ready. Never contains correct-answer information. */
   questions: Array<{
     id: number;
@@ -315,7 +320,7 @@ export async function getStudentActivity(activityId: number, token: string | und
   const participant = await authenticateParticipant(activityId, token);
   await closeIfDeadlinePassed(activityId, now);
 
-  const [row, submissions, retake] = await Promise.all([
+  const [row, submissions, retake, zeroed] = await Promise.all([
     prisma.activity.findUnique({
       where: { id: activityId },
       select: {
@@ -347,6 +352,11 @@ export async function getStudentActivity(activityId: number, token: string | und
       select: { attemptNumber: true, score: true, maxScore: true, submittedAt: true },
     }),
     prisma.retakeAuthorization.findUnique({ where: { participantId: participant.id }, select: { usedAt: true } }),
+    prisma.attemptStart.findMany({
+      where: { participantId: participant.id, exitStage: 2 },
+      orderBy: { attemptNumber: "asc" },
+      select: { attemptNumber: true },
+    }),
   ]);
   if (!row) throw UNAUTHENTICATED();
 
@@ -374,6 +384,8 @@ export async function getStudentActivity(activityId: number, token: string | und
     },
     participant: { displayName: participant.displayName },
     results,
+    exitWarning: "none" as const,
+    zeroedAttempts: zeroed.map((z) => z.attemptNumber),
   };
 
   if (row.status !== "OPEN") {
@@ -399,12 +411,105 @@ export async function getStudentActivity(activityId: number, token: string | und
   });
   const deadline = attemptDeadline(start.startedAt, row.durationMinutes, row.scheduledClosesAt);
 
+  const exitWarning: "none" | "pending" | "stayed" =
+    start.exitStage === 1 ? (start.exitDecision === "STAY" ? "stayed" : "pending") : "none";
+
   if (deadline && now.getTime() >= deadline.getTime()) {
     return { ...base, attempt: { state: "timeUp", number: plan.attemptNumber, deadline: deadline.toISOString() }, questions: [] };
   }
   return {
     ...base,
+    exitWarning,
     attempt: { state: "ready", number: plan.attemptNumber, deadline: deadline ? deadline.toISOString() : null },
     questions: row.questions,
   };
+}
+
+// ---- exit warning (Stage 3) -------------------------------------------------
+
+export type ExitEventResult = { outcome: ExitOutcome; attemptNumber: number | null };
+
+/**
+ * Records one exit-warning event for the participant's current attempt.
+ *
+ * Runs inside the activity lock, so events cannot race each other. The decision itself
+ * is made by decideExit(). An automatic zero is written in the same transaction as the
+ * warning state, so the attempt can never be half zeroed. Once an attempt has a
+ * submission, planAttempt() no longer offers it, so repeated events cannot zero twice
+ * and cannot consume a retake.
+ */
+export async function recordExitEvent(
+  activityId: number,
+  token: string | undefined,
+  event: ExitEvent,
+  now: Date = new Date(),
+): Promise<ExitEventResult> {
+  const participant = await authenticateParticipant(activityId, token);
+  await closeIfDeadlinePassed(activityId, now);
+
+  return prisma.$transaction(async (tx) => {
+    await lockActivity(tx, activityId);
+
+    const activity = await tx.activity.findUniqueOrThrow({
+      where: { id: activityId },
+      select: { status: true, archivedAt: true, maxAttempts: true, durationMinutes: true, scheduledClosesAt: true },
+    });
+    const closed =
+      activity.status !== "OPEN" ||
+      activity.archivedAt !== null ||
+      (activity.scheduledClosesAt !== null && now.getTime() >= activity.scheduledClosesAt.getTime());
+    if (closed) return { outcome: "ignored" as const, attemptNumber: null };
+
+    const [submissions, retake] = await Promise.all([
+      tx.submission.findMany({ where: { participantId: participant.id }, select: { attemptNumber: true } }),
+      tx.retakeAuthorization.findUnique({ where: { participantId: participant.id }, select: { usedAt: true } }),
+    ]);
+    const plan = planAttempt(submissions.map((s) => s.attemptNumber), activity.maxAttempts, retake);
+    if (!plan.available) return { outcome: "ignored" as const, attemptNumber: null };
+
+    const start = await tx.attemptStart.upsert({
+      where: { participantId_attemptNumber: { participantId: participant.id, attemptNumber: plan.attemptNumber } },
+      create: { participantId: participant.id, attemptNumber: plan.attemptNumber, startedAt: wholeSecond(now) },
+      update: {},
+    });
+    const deadline = attemptDeadline(start.startedAt, activity.durationMinutes, activity.scheduledClosesAt);
+    // Once time is up, the attempt already ends on its own; nothing more to record.
+    if (deadline && now.getTime() >= deadline.getTime()) {
+      return { outcome: "ignored" as const, attemptNumber: plan.attemptNumber };
+    }
+
+    const { outcome, change } = decideExit(start.exitStage, start.exitDecision, event);
+    const key = { participantId_attemptNumber: { participantId: participant.id, attemptNumber: plan.attemptNumber } };
+
+    if (change.zero) {
+      await zeroAttempt(tx, participant.id, activityId, plan.attemptNumber, now);
+    } else if (change.warnedNow || change.decision) {
+      await tx.attemptStart.update({
+        where: key,
+        data: {
+          ...(change.warnedNow ? { exitStage: 1, exitWarnedAt: wholeSecond(now) } : {}),
+          ...(change.decision ? { exitDecision: change.decision } : {}),
+        },
+      });
+    }
+
+    return { outcome, attemptNumber: plan.attemptNumber };
+  });
+}
+
+/** Writes a zero-score submission for this attempt. Called only inside the locked transaction above. */
+async function zeroAttempt(tx: Tx, participantId: number, activityId: number, attemptNumber: 1 | 2, now: Date) {
+  const questions = await tx.question.findMany({ where: { activityId }, select: { points: true } });
+  const maxScore = questions.reduce((sum, q) => sum + q.points, 0);
+
+  await tx.submission.create({
+    data: { participantId, attemptNumber, score: 0, maxScore, submittedAt: wholeSecond(now) },
+  });
+  await tx.attemptStart.update({
+    where: { participantId_attemptNumber: { participantId, attemptNumber } },
+    data: { exitStage: 2 },
+  });
+  if (attemptNumber === 2) {
+    await tx.retakeAuthorization.update({ where: { participantId }, data: { usedAt: wholeSecond(now) } });
+  }
 }

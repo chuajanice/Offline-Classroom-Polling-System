@@ -285,6 +285,12 @@ model AttemptStart {
   participantId Int         @map("participant_id")
   attemptNumber Int         @map("attempt_number")
   startedAt     DateTime    @map("started_at") @db.DateTime(0)
+  /// Stage 3 (exit warning), per attempt: 0 = none, 1 = warned, 2 = automatically zeroed.
+  exitStage     Int         @default(0) @map("exit_stage")
+  /// When the first exit warning was recorded.
+  exitWarnedAt  DateTime?   @map("exit_warned_at") @db.DateTime(0)
+  /// "STAY" once the student chose NO on the warning. NULL = not answered yet.
+  exitDecision  String?     @map("exit_decision") @db.VarChar(10)
   participant   Participant @relation(fields: [participantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([participantId, attemptNumber])

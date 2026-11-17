@@ -61,13 +61,8 @@ async function activity(title: string, maxAttempts: 1 | 2 = 2): Promise<Built> {
 
 async function join(a: Built, name: string) {
   const studentId = `P5-${name.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")}`;
-
   return joinActivity(
-    {
-      sessionCode: a.code,
-      fullName: name,
-      studentId,
-    },
+    { sessionCode: a.code, fullName: name, studentId },
     OPEN_AT,
   );
 }

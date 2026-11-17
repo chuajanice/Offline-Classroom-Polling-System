@@ -132,6 +132,12 @@ export const joinInputSchema = z.object({
 });
 export type JoinInput = z.output<typeof joinInputSchema>;
 
+/** Exit-warning events reported by the student's browser (Stage 3). */
+export const exitEventInputSchema = z.object({
+  event: z.enum(["left", "stay", "leave"], { message: "Unknown exit event." }),
+});
+export type ExitEventInput = z.output<typeof exitEventInputSchema>;
+
 /** A student's answers. Unanswered questions are simply omitted (they score zero). */
 export const submissionInputSchema = z.object({
   answers: z

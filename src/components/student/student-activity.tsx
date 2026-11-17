@@ -3,12 +3,13 @@
 // The student's answer sheet. Only the server decides what is shown: questions appear
 // only when the attempt is "ready". Correct answers are never part of this data.
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/format";
 import { requestJson } from "@/lib/request-json";
@@ -22,6 +23,64 @@ export function StudentActivity({ view }: { view: StudentActivityDto }) {
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [exitBusy, setExitBusy] = useState(false);
+
+  const exitUrl = `/api/student/activities/${view.activity.id}/exit-events`;
+  const live = view.attempt.state === "ready";
+
+  // Exit detection (Stage 3). The server decides everything; the browser only reports events.
+  // "left" is sent with keepalive so it still reaches the server while the page is going away.
+  const reportLeave = useCallback(() => {
+    void fetch(exitUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "left" }),
+      keepalive: true,
+      credentials: "same-origin",
+    }).catch(() => undefined);
+  }, [exitUrl]);
+
+  useEffect(() => {
+    if (!live) return;
+    function onVisibility() {
+      if (document.visibilityState === "hidden") reportLeave();
+      else router.refresh();
+    }
+    function onPageHide() {
+      reportLeave();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [live, reportLeave, router]);
+
+  // Browser back: keep the student on the page, record the event, and show the warning.
+  useEffect(() => {
+    if (!live) return;
+    window.history.pushState({ pollifyGuard: true }, "", window.location.href);
+    function onBack() {
+      reportLeave();
+      window.history.pushState({ pollifyGuard: true }, "", window.location.href);
+      router.refresh();
+    }
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, [live, reportLeave, router]);
+
+  async function answerExit(event: "stay" | "leave") {
+    setExitBusy(true);
+    const result = await requestJson("POST", exitUrl, { event });
+    setExitBusy(false);
+    if (!result.ok) {
+      toast({ variant: "error", title: "That did not work", description: result.error.message });
+    } else if (event === "leave") {
+      toast({ title: "Attempt scored zero", description: "You left the activity." });
+    }
+    router.refresh();
+  }
 
   // Countdown for a timed attempt. When it reaches zero, ask the server what happened.
   useEffect(() => {
@@ -167,6 +226,31 @@ export function StudentActivity({ view }: { view: StudentActivityDto }) {
           </AlertDescription>
         </Alert>
       )}
+
+      {view.zeroedAttempts.length > 0 && (
+        <Alert>
+          <AlertDescription>
+            {view.zeroedAttempts.map((n) => `Attempt ${n}`).join(" and ")} was scored zero because you left the activity during it.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Dialog open={view.exitWarning === "pending"} onOpenChange={() => undefined}>
+        <DialogContent>
+          <DialogTitle className="text-lg font-semibold">Are you sure you want to leave this activity?</DialogTitle>
+          <DialogDescription className="mt-2 text-sm text-muted-foreground">
+            Leaving the activity will automatically give you a score of ZERO.
+          </DialogDescription>
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" disabled={exitBusy} onClick={() => answerExit("leave")}>
+              YES – Leave and Submit Zero
+            </Button>
+            <Button className={CTA_CLASSES} disabled={exitBusy} onClick={() => answerExit("stay")}>
+              NO – Stay in Activity
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {view.results.length > 0 && (
         <Card>

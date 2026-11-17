@@ -6,7 +6,6 @@ import { fitText, formatNumber, renderActivityReport, toPrintable, type Activity
 import { reportFilename } from "../../src/services/report.service";
 import { extractPdfText, isPdf } from "../helpers/pdf-text";
 
-
 function sampleData(participants: ReportParticipant[]): ActivityReportData {
   return {
     systemTitle: "Offline Classroom Polling System",
