@@ -360,7 +360,14 @@ export function ActivityBuilder({
           </h2>
           <Button
             variant="outline"
-            onClick={() => updateQuestions((qs) => [...qs, blankQuestion()])}
+            onClick={() => {
+              // Stage 4: the new question goes to the top and is scrolled into view.
+              const added = blankQuestion();
+              updateQuestions((qs) => [added, ...qs]);
+              requestAnimationFrame(() =>
+                document.getElementById(`question-${added.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+              );
+            }}
             disabled={form.questions.length >= ACTIVITY_LIMITS.QUESTIONS_MAX || busy}
           >
             <Plus data-icon="inline-start" aria-hidden="true" />
@@ -378,7 +385,7 @@ export function ActivityBuilder({
         {form.questions.map((question, qi) => {
           const qPrefix = `questions.${qi}`;
           return (
-            <Card key={question.key} size="sm">
+            <Card key={question.key} id={`question-${question.key}`} size="sm">
               <CardHeader className="flex-row items-center justify-between gap-2">
                 <CardTitle>Question {qi + 1}</CardTitle>
                 <div className="flex items-center gap-1">

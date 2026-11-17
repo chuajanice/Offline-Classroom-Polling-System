@@ -8,6 +8,7 @@
 //    single unusual name cannot stop a report from being produced.
 //  - The report contains results only. It never contains question text or the answer key.
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { latestResultRows } from "./results-table";
 
 export const SYSTEM_TITLE = "Offline Classroom Polling System";
 
@@ -22,6 +23,8 @@ export type ReportAttempt = {
 
 export type ReportParticipant = {
   displayName: string;
+  /** As entered by the student. Null or absent for historical participants. */
+  studentId?: string | null;
   statusLabel: string;
   attempts: ReportAttempt[];
 };
@@ -56,13 +59,14 @@ const ROW_HEIGHT = 16;
 const HEADER_HEIGHT = 18;
 const FOOTER_Y = 28;
 
+// Stage 6 columns. Widths total CONTENT_WIDTH. Date and time are separate columns.
 const COLUMNS = [
-  { key: "name", title: "Student name", width: 150 },
-  { key: "status", title: "Status", width: 96 },
-  { key: "attempt", title: "Attempt", width: 56 },
-  { key: "score", title: "Score", width: 62 },
-  { key: "percent", title: "Percent", width: 54 },
-  { key: "submitted", title: "Submitted", width: 81 },
+  { key: "no", title: "No.", width: 34 },
+  { key: "studentId", title: "Student ID", width: 88 },
+  { key: "name", title: "Student Name", width: 165 },
+  { key: "score", title: "Score", width: 70 },
+  { key: "date", title: "Date", width: 75 },
+  { key: "time", title: "Time", width: 67 },
 ] as const;
 
 // ---- text helpers ----------------------------------------------------------
@@ -209,26 +213,11 @@ export async function renderActivityReport(data: ActivityReportData): Promise<Ui
   };
 
   if (data.participants.length === 0) {
-    rowFor({ name: "No students have joined", status: "", attempt: "", score: "", percent: "", submitted: "" });
+    rowFor({ no: "", studentId: "", name: "No students have joined", score: "", date: "", time: "" });
   }
 
-  for (const participant of data.participants) {
-    const name = participant.displayName;
-    if (participant.attempts.length === 0) {
-      rowFor({ name, status: participant.statusLabel, attempt: "-", score: "-", percent: "-", submitted: "Not submitted" });
-      continue;
-    }
-    participant.attempts.forEach((a, index) => {
-      rowFor({
-        name: index === 0 ? name : "",
-        status: index === 0 ? participant.statusLabel : "",
-        attempt: a.isCurrent ? `${a.attemptNumber} (current)` : String(a.attemptNumber),
-        score: `${formatNumber(a.score)} / ${formatNumber(a.maxScore)}`,
-        percent: `${formatNumber(a.percentage)}%`,
-        submitted: formatDate(a.submittedAt),
-      });
-    });
-  }
+  // One row per participant: the latest accepted attempt only (see results-table.ts).
+  for (const row of latestResultRows(data.participants)) rowFor(row);
 
   // -- footers
   pages.forEach((p, i) => {

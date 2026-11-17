@@ -401,3 +401,38 @@ export async function getDashboardStats(instructorId: number) {
     recent: recent.map(toSummary),
   };
 }
+
+/**
+ * Permanently removes an ARCHIVED activity and everything that belongs only to it: questions,
+ * choices, participants, submissions, submission answers, attempt starts and retake authorisations.
+ * The classroom, the instructor and every other activity are untouched.
+ *
+ * Every foreign key on these tables is RESTRICT, so the children are removed first, in order,
+ * inside one transaction: either the whole activity goes or nothing does.
+ */
+export async function permanentlyDeleteActivity(instructorId: number, id: number): Promise<void> {
+  const existing = await prisma.activity.findFirst({
+    where: { id, classroom: { instructorId } },
+    select: { id: true, archivedAt: true },
+  });
+  if (!existing) throw notFoundActivity();
+  if (existing.archivedAt === null) {
+    throw new AppError(
+      409,
+      "ACTIVITY_NOT_ARCHIVED",
+      "Only archived activities can be permanently deleted. Archive it first.",
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.submissionAnswer.deleteMany({ where: { submission: { participant: { activityId: id } } } });
+    await tx.submission.deleteMany({ where: { participant: { activityId: id } } });
+    await tx.retakeAuthorization.deleteMany({ where: { participant: { activityId: id } } });
+    await tx.attemptStart.deleteMany({ where: { participant: { activityId: id } } });
+    await tx.participant.deleteMany({ where: { activityId: id } });
+    await tx.choice.deleteMany({ where: { question: { activityId: id } } });
+    await tx.question.deleteMany({ where: { activityId: id } });
+    await tx.activity.delete({ where: { id } });
+  });
+}
+

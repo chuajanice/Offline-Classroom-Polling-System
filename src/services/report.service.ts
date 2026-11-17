@@ -31,6 +31,7 @@ export function toReportData(r: ActivityResultsDto, generatedAt: Date): Activity
     generatedAt: generatedAt.toISOString(),
     participants: r.participants.map((p) => ({
       displayName: p.displayName,
+      studentId: p.studentId,
       statusLabel: SUBMISSION_STATUS_LABEL[p.submissionStatus],
       attempts: p.attempts.map((a) => ({
         attemptNumber: a.attemptNumber,

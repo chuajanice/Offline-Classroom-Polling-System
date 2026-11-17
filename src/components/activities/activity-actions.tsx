@@ -12,7 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { requestJson } from "@/lib/request-json";
 import { CTA_CLASSES } from "@/lib/ui-classes";
 
-type Busy = "publish" | "unpublish" | "delete" | "open" | "close" | "archive" | "restore" | null;
+type Busy = "publish" | "unpublish" | "delete" | "purge" | "open" | "close" | "archive" | "restore" | null;
 
 export function ActivityActions({
   activityId,
@@ -32,7 +32,7 @@ export function ActivityActions({
   const router = useRouter();
   const { toast } = useToast();
   const [busy, setBusy] = useState<Busy>(null);
-  const [confirm, setConfirm] = useState<null | "open" | "close" | "archive" | "delete">(null);
+  const [confirm, setConfirm] = useState<null | "open" | "close" | "archive" | "delete" | "purge">(null);
 
   async function run(action: Exclude<Busy, null>, method: "POST" | "DELETE", url: string, success: string) {
     setBusy(action);
@@ -44,7 +44,7 @@ export function ActivityActions({
       return;
     }
     toast({ title: success });
-    if (action === "delete") {
+    if (action === "delete" || action === "purge") {
       router.replace("/activities");
     }
     router.refresh();
@@ -59,6 +59,19 @@ export function ActivityActions({
         <Button className={CTA_CLASSES} disabled={isBusy} onClick={() => run("restore", "POST", `${base}/restore`, "Activity restored")}>
           {busy === "restore" ? "Restoring…" : "Restore activity"}
         </Button>
+        {/* Stage 7: only archived activities can be permanently deleted. */}
+        <Button variant="ghost" className="text-destructive" disabled={isBusy} onClick={() => setConfirm("purge")}>
+          {busy === "purge" ? "Deleting…" : "Permanently delete"}
+        </Button>
+        <ConfirmDialog
+          open={confirm === "purge"}
+          onOpenChange={(o) => !o && setConfirm(null)}
+          title="Permanently delete this activity?"
+          description="This action will permanently remove the activity, all associated participants, submissions, answers, scores, and related records. This action cannot be undone."
+          confirmLabel="Permanently Delete"
+          pending={busy === "purge"}
+          onConfirm={() => run("purge", "DELETE", `${base}/permanent`, "Activity permanently deleted")}
+        />
       </div>
     );
   }
@@ -129,6 +142,10 @@ export function ActivityActions({
           </Button>
         </>
       )}
+
+      <Link href={`${base}/question-paper`} target="_blank" rel="noopener" className={buttonVariants({ variant: "outline" })}>
+        Preview / Print questions
+      </Link>
 
       <ConfirmDialog
         open={confirm === "open"}

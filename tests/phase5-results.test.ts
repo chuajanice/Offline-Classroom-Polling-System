@@ -221,15 +221,20 @@ describe("the PDF report built from the database", () => {
       "Ana Owner",
       "Reporting room",
       "Report contents",
+      "Student ID",
+      "Student Name",
+      "Score",
+      "Date",
+      "Time",
       "Report One",
       "Report Two",
       "Report Three",
       "Not submitted",
       "Total participants",
       "Total submissions",
-      "66.67%",
+      "33.34%",
       "2 / 3",
-      "1 (current)",
+      "0 / 3",
     ]) {
       assert.ok(text.includes(expected), `missing "${expected}"`);
     }

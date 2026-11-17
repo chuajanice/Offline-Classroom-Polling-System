@@ -8,7 +8,7 @@ const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const nextConfig: NextConfig = {
   /* config options here */
-  allowedDevOrigins: ["192.168.254.115"],
+  //allowedDevOrigins: ["192.168.254.115"],
   cacheComponents: false,
   partialPrefetching: false,
   turbopack: {

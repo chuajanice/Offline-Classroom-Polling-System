@@ -52,7 +52,8 @@ describe("PDF rendering", () => {
       "Total participants",
       "Total submissions",
       "Ana Santos",
-      "Submitted",
+      "Student ID",
+      "Student Name",
       "2 / 3",
       "66.67%",
     ]) {
@@ -70,7 +71,7 @@ describe("PDF rendering", () => {
     assert.ok(text.includes("Not submitted"));
   });
 
-  it("shows both attempts of a retake, marking the current one", async () => {
+  it("shows only the latest accepted attempt of a retake, on one row", async () => {
     const retake: ReportParticipant = {
       displayName: "Retake Kid",
       statusLabel: "Retake submitted",
@@ -80,10 +81,9 @@ describe("PDF rendering", () => {
       ],
     };
     const text = extractPdfText(await renderActivityReport(sampleData([retake])));
-    assert.ok(text.includes("2 (current)"));
-    assert.ok(text.includes("100%"));
-    assert.ok(text.includes("0%"));
-    assert.equal(text.split("Retake Kid").length - 1, 1, "the name appears once, on the first row");
+    assert.ok(text.includes("3 / 3"), "the latest attempt is shown");
+    assert.ok(!text.includes("0 / 3"), "the earlier attempt is not shown");
+    assert.equal(text.split("Retake Kid").length - 1, 1, "the name appears once");
   });
 
   it("never contains question text or the answer key", async () => {
@@ -99,7 +99,7 @@ describe("PDF rendering", () => {
     const doc = await PDFDocument.load(bytes);
     assert.ok(doc.getPageCount() > 1, "120 rows need more than one page");
     const text = extractPdfText(bytes);
-    assert.equal(text.split("Student name").length - 1, doc.getPageCount(), "header on every page");
+    assert.equal(text.split("Student Name").length - 1, doc.getPageCount(), "header on every page");
     assert.ok(text.includes(`Page ${doc.getPageCount()} of ${doc.getPageCount()}`));
   });
 
