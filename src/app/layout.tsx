@@ -4,6 +4,7 @@ import "./globals.css";
 import { SilkBackground } from "@/components/background/silk-background";
 import { AppearanceProvider } from "@/components/theme/theme-provider";
 import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
+import { ToastProvider } from "@/components/ui/toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,11 +36,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
       </head>
       <body className="relative isolate flex min-h-full flex-col">
-        <AppearanceProvider>
-          <ServiceWorkerRegister />
-          <SilkBackground />
-          {children}
-        </AppearanceProvider>
+        <ToastProvider>
+          <AppearanceProvider>
+            <ServiceWorkerRegister />
+            <SilkBackground />
+            {children}
+          </AppearanceProvider>
+        </ToastProvider>
       </body>
     </html>
   );

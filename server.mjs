@@ -11,8 +11,8 @@ const dev = false;
 const certificatesDirectory = join(process.cwd(), "certificates");
 
 const httpsOptions = {
-  key: readFileSync(join(certificatesDirectory, "pollify-key.pem")),
-  cert: readFileSync(join(certificatesDirectory, "pollify-cert.pem")),
+  key: readFileSync(join(certificatesDirectory, "pollifybrgy-key.pem")),
+  cert: readFileSync(join(certificatesDirectory, "pollifybrgy-cert.pem")),
 };
 
 const app = next({ dev, hostname, port });
@@ -26,7 +26,7 @@ async function startServer() {
   }).listen(port, hostname, () => {
     console.log(`Pollify HTTPS server running at:`);
     console.log(`  Local: https://localhost:${port}`);
-    console.log(`  LAN:   https://192.168.254.115:${port}`);
+    console.log(`  LAN:   https://192.168.100.98:${port}`);
   });
 }
 
