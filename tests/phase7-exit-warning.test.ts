@@ -12,7 +12,7 @@ import { createClassroom } from "../src/services/classroom.service";
 import { createActivity, publishActivity } from "../src/services/activity.service";
 import { openActivity } from "../src/services/session.service";
 import { authorizeRetake } from "../src/services/results.service";
-import { getStudentActivity, joinActivity, recordExitEvent, submitAnswers } from "../src/services/student.service";
+import { getStudentActivity, joinActivity, recordExitEvent, startAttempt, submitAnswers } from "../src/services/student.service";
 
 const run = randomBytes(4).toString("hex");
 const PREFIX = "phase7-exitwarn-";
@@ -45,6 +45,7 @@ async function openedActivity(title: string, maxAttempts: 1 | 2 = 1) {
 
 async function joined(a: { id: number; code: string }, name: string, studentId: string) {
   const r = await joinActivity({ sessionCode: a.code, fullName: name, studentId }, BEFORE);
+  await startAttempt(a.id, r.token, BEFORE); // Stage 9: the clock starts only on Start
   return r.token;
 }
 
@@ -144,6 +145,7 @@ describe("exit warning (Stage 3)", () => {
     await recordExitEvent(a.id, token, "leave", LATER);
     const participant = await prisma.participant.findFirstOrThrow({ where: { activityId: a.id, sessionTokenHash: hash(token) } });
     await authorizeRetake(owner, a.id, participant.id);
+    await startAttempt(a.id, token, LATER);
 
     const view = await getStudentActivity(a.id, token, LATER);
     assert.equal(view.attempt.state, "ready");

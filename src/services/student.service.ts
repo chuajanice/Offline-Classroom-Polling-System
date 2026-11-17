@@ -293,7 +293,7 @@ export type StudentActivityDto = {
   participant: { displayName: string };
   attempt: {
     /** ready: answer now. timeUp: the time limit ran out. finished: nothing left to answer. closed: activity closed. */
-    state: "ready" | "timeUp" | "finished" | "closed";
+    state: "instructions" | "ready" | "timeUp" | "finished" | "closed";
     number: number | null;
     deadline: string | null;
   };
@@ -401,14 +401,14 @@ export async function getStudentActivity(activityId: number, token: string | und
     return { ...base, attempt: { state: "finished", number: null, deadline: null }, questions: [] };
   }
 
-  // Record the start of this attempt the first time it is shown (idempotent).
-  await prisma.attemptStart.createMany({
-    data: [{ participantId: participant.id, attemptNumber: plan.attemptNumber, startedAt: wholeSecond(now) }],
-    skipDuplicates: true,
-  });
-  const start = await prisma.attemptStart.findUniqueOrThrow({
+  // Stage 9: the clock starts only when the student presses Start (startAttempt). Showing the
+  // instructions must not start the timer, so no attempt-start row is created here.
+  const start = await prisma.attemptStart.findUnique({
     where: { participantId_attemptNumber: { participantId: participant.id, attemptNumber: plan.attemptNumber } },
   });
+  if (!start) {
+    return { ...base, attempt: { state: "instructions", number: plan.attemptNumber, deadline: null }, questions: [] };
+  }
   const deadline = attemptDeadline(start.startedAt, row.durationMinutes, row.scheduledClosesAt);
 
   const exitWarning: "none" | "pending" | "stayed" =
@@ -467,11 +467,11 @@ export async function recordExitEvent(
     const plan = planAttempt(submissions.map((s) => s.attemptNumber), activity.maxAttempts, retake);
     if (!plan.available) return { outcome: "ignored" as const, attemptNumber: null };
 
-    const start = await tx.attemptStart.upsert({
+    // Stage 9: an exit event before the attempt is started is ignored, so it cannot start the clock.
+    const start = await tx.attemptStart.findUnique({
       where: { participantId_attemptNumber: { participantId: participant.id, attemptNumber: plan.attemptNumber } },
-      create: { participantId: participant.id, attemptNumber: plan.attemptNumber, startedAt: wholeSecond(now) },
-      update: {},
     });
+    if (!start) return { outcome: "ignored" as const, attemptNumber: plan.attemptNumber };
     const deadline = attemptDeadline(start.startedAt, activity.durationMinutes, activity.scheduledClosesAt);
     // Once time is up, the attempt already ends on its own; nothing more to record.
     if (deadline && now.getTime() >= deadline.getTime()) {
@@ -513,3 +513,37 @@ async function zeroAttempt(tx: Tx, participantId: number, activityId: number, at
     await tx.retakeAuthorization.update({ where: { participantId }, data: { usedAt: wholeSecond(now) } });
   }
 }
+
+/**
+ * Stage 9: the student pressed "Start activity". Only this starts the timer. Starting is
+ * idempotent: pressing it again returns the same start time, so the clock cannot be reset.
+ */
+export async function startAttempt(activityId: number, token: string | undefined, now: Date = new Date()): Promise<{ started: boolean }> {
+  const participant = await authenticateParticipant(activityId, token);
+  await closeIfDeadlinePassed(activityId, now);
+
+  return prisma.$transaction(async (tx) => {
+    await lockActivity(tx, activityId);
+    const activity = await tx.activity.findUniqueOrThrow({
+      where: { id: activityId },
+      select: { status: true, archivedAt: true, maxAttempts: true },
+    });
+    if (activity.status !== "OPEN" || activity.archivedAt !== null) {
+      throw new AppError(409, "ACTIVITY_CLOSED", "This activity is closed, so it cannot be started.");
+    }
+    const [submissions, retake] = await Promise.all([
+      tx.submission.findMany({ where: { participantId: participant.id }, select: { attemptNumber: true } }),
+      tx.retakeAuthorization.findUnique({ where: { participantId: participant.id }, select: { usedAt: true } }),
+    ]);
+    const plan = planAttempt(submissions.map((s) => s.attemptNumber), activity.maxAttempts, retake);
+    if (!plan.available) {
+      throw new AppError(409, "NO_ATTEMPT_LEFT", "You have no attempts left for this activity.");
+    }
+    await tx.attemptStart.createMany({
+      data: [{ participantId: participant.id, attemptNumber: plan.attemptNumber, startedAt: wholeSecond(now) }],
+      skipDuplicates: true,
+    });
+    return { started: true };
+  });
+}
+

@@ -11,7 +11,7 @@ import type { ActivityInput } from "../src/lib/builder-validation";
 import { createClassroom } from "../src/services/classroom.service";
 import { createActivity, publishActivity } from "../src/services/activity.service";
 import { openActivity, closeActivity } from "../src/services/session.service";
-import { authenticateParticipant, getStudentActivity, joinActivity } from "../src/services/student.service";
+import { authenticateParticipant, getStudentActivity, joinActivity, startAttempt } from "../src/services/student.service";
 
 const run = randomBytes(4).toString("hex");
 /** Unique per file: parallel test files never delete each other's rows. */
@@ -170,6 +170,7 @@ describe("the student view and token binding", () => {
   it("shows questions and choices to the joined participant, with no correct-answer information", async () => {
     const { id, code } = await openedActivity("Student view");
     const { token } = await joinActivity({ sessionCode: code, fullName: "Eve Tan", studentId: "S-013" }, BEFORE);
+    await startAttempt(id, token, BEFORE); // Stage 9: questions appear once the student has started
     const view = await getStudentActivity(id, token, BEFORE);
     assert.equal(view.activity.status, "OPEN");
     assert.equal(view.questions.length, 2);

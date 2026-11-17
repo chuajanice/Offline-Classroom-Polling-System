@@ -24,6 +24,19 @@ export function StudentActivity({ view }: { view: StudentActivityDto }) {
   const [confirming, setConfirming] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [exitBusy, setExitBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  // Stage 9: pressing Start is the only thing that starts the timer.
+  async function startActivity() {
+    setStarting(true);
+    const result = await requestJson("POST", `/api/student/activities/${view.activity.id}/start`);
+    setStarting(false);
+    if (!result.ok) {
+      toast({ variant: "error", title: "The activity could not be started", description: result.error.message });
+      return;
+    }
+    router.refresh();
+  }
 
   const exitUrl = `/api/student/activities/${view.activity.id}/exit-events`;
   const live = view.attempt.state === "ready";
@@ -203,6 +216,29 @@ export function StudentActivity({ view }: { view: StudentActivityDto }) {
             onConfirm={submit}
           />
         </>
+      )}
+
+      {view.attempt.state === "instructions" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Before you begin</CardTitle>
+            <CardDescription>Read these points, then press Start activity when you are ready.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ol className="list-decimal space-y-2 pl-5 text-sm">
+              <li>The timer starts automatically when you press Start activity.</li>
+              <li>Stay on this page while you answer.</li>
+              <li>Leaving the page or switching tabs may trigger an exit warning.</li>
+              <li>The first time you leave, you must confirm whether you want to stay.</li>
+              <li>If you choose NO – Stay in Activity, you can continue. Leaving again automatically gives you a score of zero.</li>
+              <li>If you choose YES – Leave and Submit Zero, your attempt is scored zero at once.</li>
+              <li>Submit your answers before the time runs out, if the activity has a time limit.</li>
+            </ol>
+            <Button className={`${CTA_CLASSES} h-12 w-full text-base`} disabled={starting} onClick={startActivity}>
+              {starting ? "Starting…" : "Start activity"}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {view.attempt.state === "timeUp" && (

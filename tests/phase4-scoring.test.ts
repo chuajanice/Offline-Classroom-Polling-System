@@ -11,7 +11,7 @@ import type { ActivityInput } from "../src/lib/builder-validation";
 import { createClassroom } from "../src/services/classroom.service";
 import { createActivity, publishActivity } from "../src/services/activity.service";
 import { closeActivity, openActivity } from "../src/services/session.service";
-import { getStudentActivity, joinActivity, submitAnswers } from "../src/services/student.service";
+import { getStudentActivity, joinActivity, startAttempt, submitAnswers } from "../src/services/student.service";
 
 const run = randomBytes(4).toString("hex");
 /** Unique per file: parallel test files never delete each other's rows. */
@@ -143,10 +143,11 @@ describe("submitting answers", () => {
     );
   });
 
-  it("enforces the time limit from when the questions were first shown", async () => {
+  it("enforces the time limit from when the activity was started", async () => {
     const a = await openedActivity("Timed", { durationMinutes: 5 });
     const late = await student(a, "Too Slow");
     await getStudentActivity(a.id, late, WINDOW_START);
+    await startAttempt(a.id, late, WINDOW_START);
     await assert.rejects(
       submitAnswers(a.id, late, { answers: [] }, new Date("2030-03-01T08:06:00Z")),
       isStatus(409, "TIME_UP"),
@@ -154,6 +155,7 @@ describe("submitting answers", () => {
 
     const quick = await student(a, "On Time");
     await getStudentActivity(a.id, quick, WINDOW_START);
+    await startAttempt(a.id, quick, WINDOW_START);
     const result = await submitAnswers(a.id, quick, { answers: [] }, new Date("2030-03-01T08:04:00Z"));
     assert.equal(result.score, 0);
   });
@@ -162,6 +164,7 @@ describe("submitting answers", () => {
     const a = await openedActivity("Time up view", { durationMinutes: 5 });
     const token = await student(a, "Viewer Kid");
     await getStudentActivity(a.id, token, WINDOW_START);
+    await startAttempt(a.id, token, WINDOW_START);
     const view = await getStudentActivity(a.id, token, new Date("2030-03-01T08:10:00Z"));
     assert.equal(view.attempt.state, "timeUp");
     assert.equal(view.questions.length, 0);
@@ -210,6 +213,7 @@ describe("authorised retakes", () => {
     await submitAnswers(a.id, token, { answers: [] }, WINDOW_START);
 
     await prisma.retakeAuthorization.create({ data: { participantId: p.id, authorizedBy: owner } });
+    await startAttempt(a.id, token, WINDOW_START); // Stage 9: the retake starts with its own Start press
     const again = await getStudentActivity(a.id, token, WINDOW_START);
     assert.equal(again.attempt.state, "ready");
     assert.equal(again.attempt.number, 2);

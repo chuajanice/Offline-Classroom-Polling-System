@@ -12,6 +12,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   pending = false,
+  pendingLabel = "Working…",
   onConfirm,
 }: {
   open: boolean;
@@ -20,6 +21,8 @@ export function ConfirmDialog({
   description: string;
   confirmLabel: string;
   pending?: boolean;
+  /** Shown on the confirm button while the request runs, e.g. "Archiving…". */
+  pendingLabel?: string;
   onConfirm: () => void;
 }) {
   return (
@@ -32,7 +35,7 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={pending}>
-            {pending ? "Working…" : confirmLabel}
+            {pending ? pendingLabel : confirmLabel}
           </Button>
         </div>
       </DialogContent>

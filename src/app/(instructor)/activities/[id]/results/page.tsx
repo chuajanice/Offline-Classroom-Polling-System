@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { PdfButton } from "@/components/ui/pdf-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ParticipantTable } from "@/components/results/participant-table";
 import { AutoRefresh } from "@/components/results/auto-refresh";
 import { toPositiveId } from "@/lib/builder-validation";
 import { formatDateTime } from "@/lib/format";
 import { orNotFound } from "@/lib/page-helpers";
-import { CTA_CLASSES } from "@/lib/ui-classes";
 import { requireInstructor } from "@/lib/session";
 import { getActivityResults } from "@/services/results.service";
 
@@ -47,13 +46,13 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
               {" · "}Instructor {data.instructor.fullName}
             </p>
           </div>
-          <a
+          <PdfButton
             href={`/api/activities/${data.activity.id}/report`}
-            download
-            className={buttonVariants({ className: CTA_CLASSES })}
-          >
-            Download PDF report
-          </a>
+            label="Download PDF report"
+            busyLabel="Generating PDF…"
+            mode="download"
+            variant="cta"
+          />
         </div>
         {live && <p className="text-xs text-muted-foreground">Refreshes every 10 seconds.</p>}
       </div>

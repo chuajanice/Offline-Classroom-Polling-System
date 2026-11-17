@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { PdfButton } from "@/components/ui/pdf-button";
 import { useToast } from "@/components/ui/toast";
 import { requestJson } from "@/lib/request-json";
 import { CTA_CLASSES } from "@/lib/ui-classes";
@@ -70,6 +71,7 @@ export function ActivityActions({
           description="This action will permanently remove the activity, all associated participants, submissions, answers, scores, and related records. This action cannot be undone."
           confirmLabel="Permanently Delete"
           pending={busy === "purge"}
+        pendingLabel="Deleting…"
           onConfirm={() => run("purge", "DELETE", `${base}/permanent`, "Activity permanently deleted")}
         />
       </div>
@@ -143,9 +145,7 @@ export function ActivityActions({
         </>
       )}
 
-      <Link href={`${base}/question-paper`} target="_blank" rel="noopener" className={buttonVariants({ variant: "outline" })}>
-        Preview / Print questions
-      </Link>
+      <PdfButton href={`${base}/question-paper`} label="Preview / Print questions" busyLabel="Generating PDF…" mode="preview" />
 
       <ConfirmDialog
         open={confirm === "open"}
@@ -154,6 +154,7 @@ export function ActivityActions({
         description="Students will receive a session code and can join until you close the session or its closing time passes. The questions and choices can no longer be changed."
         confirmLabel="Open session"
         pending={busy === "open"}
+        pendingLabel="Opening…"
         onConfirm={() => run("open", "POST", `${base}/open`, "Session is open")}
       />
       <ConfirmDialog
@@ -163,6 +164,7 @@ export function ActivityActions({
         description="Students can no longer join or submit answers. Results are kept."
         confirmLabel="Close session"
         pending={busy === "close"}
+        pendingLabel="Closing…"
         onConfirm={() => run("close", "POST", `${base}/close`, "Session closed")}
       />
       <ConfirmDialog
@@ -176,6 +178,7 @@ export function ActivityActions({
         }
         confirmLabel="Archive activity"
         pending={busy === "archive"}
+        pendingLabel="Archiving…"
         onConfirm={() => run("archive", "POST", `${base}/archive`, "Activity archived")}
       />
       <ConfirmDialog
@@ -185,6 +188,7 @@ export function ActivityActions({
         description="The draft and its questions and choices will be permanently removed. This cannot be undone."
         confirmLabel="Delete draft"
         pending={busy === "delete"}
+        pendingLabel="Deleting…"
         onConfirm={() => run("delete", "DELETE", base, "Draft deleted")}
       />
     </div>
