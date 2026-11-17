@@ -57,7 +57,7 @@ async function openedActivity(title: string, opts: { maxAttempts?: 1 | 2; durati
 }
 
 async function student(a: Built, name: string) {
-  const { token } = await joinActivity({ sessionCode: a.code, fullName: name }, OPEN_AT);
+  const { token } = await joinActivity({ sessionCode: a.code, fullName: name, studentId: `ID-${name.replace(/[^A-Za-z0-9]/g, "")}` }, OPEN_AT);
   return token;
 }
 

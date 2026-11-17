@@ -1,9 +1,11 @@
+import "dotenv/config";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { fitText, formatNumber, renderActivityReport, toPrintable, type ActivityReportData, type ReportParticipant } from "../../src/lib/pdf";
 import { reportFilename } from "../../src/services/report.service";
 import { extractPdfText, isPdf } from "../helpers/pdf-text";
+
 
 function sampleData(participants: ReportParticipant[]): ActivityReportData {
   return {

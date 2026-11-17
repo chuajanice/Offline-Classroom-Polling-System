@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError, isUniqueViolation } from "@/lib/errors";
 import { hashSessionToken, generateSessionToken } from "@/lib/security";
 import { checkDisplayName } from "@/lib/student-name";
+import { checkStudentId } from "@/lib/student-id";
 import { isWellFormedSessionCode, normalizeSessionCode } from "@/lib/session-code";
 import type { JoinInput, SubmissionInput } from "@/lib/builder-validation";
 import { closeIfDeadlinePassed } from "./lifecycle";
@@ -41,6 +42,13 @@ export async function joinActivity(input: JoinInput, now: Date = new Date()): Pr
     });
   }
 
+  const id = checkStudentId(input.studentId ?? "");
+  if (!id.ok) {
+    throw new AppError(400, "VALIDATION_ERROR", "Please correct the highlighted field.", {
+      fields: { studentId: id.message },
+    });
+  }
+
   const code = normalizeSessionCode(input.sessionCode);
   if (!isWellFormedSessionCode(code)) {
     throw new AppError(404, "INVALID_CODE", INVALID_CODE_MESSAGE);
@@ -65,19 +73,41 @@ export async function joinActivity(input: JoinInput, now: Date = new Date()): Pr
         throw new AppError(409, "ACTIVITY_CLOSED", CLOSED_MESSAGE);
       }
 
-      const existing = await tx.participant.findFirst({
-        where: { activityId: activity.id, normalizedName: name.normalizedName },
+      // The student ID is the identity: the same normalized ID can join an activity only once,
+      // whatever spelling of the name is used.
+      const sameId = await tx.participant.findFirst({
+        where: { activityId: activity.id, normalizedStudentId: id.normalizedStudentId },
         select: { id: true, accessReleasedAt: true },
       });
-      if (existing) {
-        // Only an instructor-released participant may reclaim the name. The new token
-        // replaces the hash, so the old token stops working. History is kept.
-        if (existing.accessReleasedAt === null) throw nameTaken();
+      if (sameId) {
+        // Only an instructor-released participant may reclaim. The new token replaces the
+        // hash, so the old token stops working. History is kept.
+        if (sameId.accessReleasedAt === null) throw studentIdTaken();
         await tx.participant.update({
-          where: { id: existing.id },
+          where: { id: sameId.id },
           data: { sessionTokenHash: hashSessionToken(token), accessReleasedAt: null },
         });
-        return { activityId: activity.id, participantId: existing.id, token };
+        return { activityId: activity.id, participantId: sameId.id, token };
+      }
+
+      // Historical participants have no ID. A released one with the same name may be
+      // reclaimed, and the ID just entered is recorded on it. Nothing is fabricated.
+      const legacy = await tx.participant.findFirst({
+        where: { activityId: activity.id, normalizedName: name.normalizedName, normalizedStudentId: null },
+        select: { id: true, accessReleasedAt: true },
+      });
+      if (legacy) {
+        if (legacy.accessReleasedAt === null) throw nameTaken();
+        await tx.participant.update({
+          where: { id: legacy.id },
+          data: {
+            sessionTokenHash: hashSessionToken(token),
+            accessReleasedAt: null,
+            studentId: id.studentId,
+            normalizedStudentId: id.normalizedStudentId,
+          },
+        });
+        return { activityId: activity.id, participantId: legacy.id, token };
       }
 
       const participant = await tx.participant.create({
@@ -85,6 +115,8 @@ export async function joinActivity(input: JoinInput, now: Date = new Date()): Pr
           activityId: activity.id,
           displayName: name.displayName,
           normalizedName: name.normalizedName,
+          studentId: id.studentId,
+          normalizedStudentId: id.normalizedStudentId,
           sessionTokenHash: hashSessionToken(token),
         },
         select: { id: true },
@@ -92,10 +124,27 @@ export async function joinActivity(input: JoinInput, now: Date = new Date()): Pr
       return { activityId: activity.id, participantId: participant.id, token };
     });
   } catch (error) {
-    // The unique index on (activity, normalized name) catches a concurrent duplicate join.
-    if (isUniqueViolation(error)) throw nameTaken();
+    // Concurrent duplicates are serialised by the row lock above; the unique indexes are the
+    // final guard. Say which rule was broken.
+    if (isUniqueViolation(error)) {
+      throw isStudentIdViolation(error) ? studentIdTaken() : nameTaken();
+    }
     throw error;
   }
+}
+
+const studentIdTaken = () =>
+  new AppError(
+    409,
+    "STUDENT_ID_TAKEN",
+    "This student ID has already joined this activity. If that was you, ask your instructor to restore your access.",
+  );
+
+function isStudentIdViolation(error: unknown): boolean {
+  const e = error as { meta?: { target?: unknown }; message?: unknown };
+  const target = JSON.stringify(e.meta?.target ?? "");
+  const message = typeof e.message === "string" ? e.message : "";
+  return /normalized_student_id/.test(target) || /normalized_student_id/.test(message);
 }
 
 const nameTaken = () =>

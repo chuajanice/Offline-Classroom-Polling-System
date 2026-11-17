@@ -60,7 +60,16 @@ async function activity(title: string, maxAttempts: 1 | 2 = 2): Promise<Built> {
 }
 
 async function join(a: Built, name: string) {
-  return joinActivity({ sessionCode: a.code, fullName: name }, OPEN_AT);
+  const studentId = `P5-${name.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")}`;
+
+  return joinActivity(
+    {
+      sessionCode: a.code,
+      fullName: name,
+      studentId,
+    },
+    OPEN_AT,
+  );
 }
 
 const isStatus = (status: number, code: string) => (e: unknown) =>

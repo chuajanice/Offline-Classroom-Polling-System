@@ -66,7 +66,7 @@ after(async () => {
 describe("joining an activity", () => {
   it("issues a token, stores only its hash, and binds the participant to the activity", async () => {
     const { id, code } = await openedActivity("Join basics");
-    const joined = await joinActivity({ sessionCode: code, fullName: "Ana Santos" }, BEFORE);
+    const joined = await joinActivity({ sessionCode: code, fullName: "Ana Santos", studentId: "S-001" }, BEFORE);
     assert.equal(joined.activityId, id);
     assert.ok(joined.token.length >= 40, "token is long and random");
     const row = await prisma.participant.findUniqueOrThrow({ where: { id: joined.participantId } });
@@ -78,43 +78,78 @@ describe("joining an activity", () => {
   it("accepts the code typed in lower case, with spaces or hyphens", async () => {
     const { code } = await openedActivity("Forgiving code");
     const typed = code.toLowerCase().split("").join(" ");
-    const joined = await joinActivity({ sessionCode: typed, fullName: "Ben Cruz" }, BEFORE);
+    const joined = await joinActivity({ sessionCode: typed, fullName: "Ben Cruz", studentId: "S-002" }, BEFORE);
     assert.ok(joined.participantId > 0);
   });
 
   it("gives the same not-found message for unknown and malformed codes", async () => {
-    await assert.rejects(joinActivity({ sessionCode: "ZZZZZZZZ", fullName: "Nobody" }, BEFORE), isStatus(404, "INVALID_CODE"));
-    await assert.rejects(joinActivity({ sessionCode: "OO00", fullName: "Nobody" }, BEFORE), isStatus(404, "INVALID_CODE"));
+    await assert.rejects(joinActivity({ sessionCode: "ZZZZZZZZ", fullName: "Nobody", studentId: "S-003" }, BEFORE), isStatus(404, "INVALID_CODE"));
+    await assert.rejects(joinActivity({ sessionCode: "OO00", fullName: "Nobody", studentId: "S-004" }, BEFORE), isStatus(404, "INVALID_CODE"));
   });
 
   it("refuses a closed activity", async () => {
     const { id, code } = await openedActivity("Closed to joins");
     await closeActivity(owner, id, BEFORE);
-    await assert.rejects(joinActivity({ sessionCode: code, fullName: "Late Comer" }, BEFORE), isStatus(409, "ACTIVITY_CLOSED"));
+    await assert.rejects(joinActivity({ sessionCode: code, fullName: "Late Comer", studentId: "S-005" }, BEFORE), isStatus(409, "ACTIVITY_CLOSED"));
   });
 
   it("refuses a join after the scheduled deadline, even before anyone closed it", async () => {
     const { code } = await openedActivity("Deadline join");
-    await assert.rejects(joinActivity({ sessionCode: code, fullName: "Too Late" }, AFTER_CLOSE), isStatus(409, "ACTIVITY_CLOSED"));
+    await assert.rejects(joinActivity({ sessionCode: code, fullName: "Too Late", studentId: "S-006" }, AFTER_CLOSE), isStatus(409, "ACTIVITY_CLOSED"));
   });
 
   it("refuses a duplicate name in the same activity, ignoring case and spacing", async () => {
     const { code } = await openedActivity("Duplicate names");
-    await joinActivity({ sessionCode: code, fullName: "Carla Reyes" }, BEFORE);
-    await assert.rejects(joinActivity({ sessionCode: code, fullName: "  carla   REYES " }, BEFORE), isStatus(409, "NAME_TAKEN"));
+    await joinActivity({ sessionCode: code, fullName: "Carla Reyes", studentId: "S-007" }, BEFORE);
+    await assert.rejects(joinActivity({ sessionCode: code, fullName: "  carla   REYES ", studentId: "S-008" }, BEFORE), isStatus(409, "NAME_TAKEN"));
+  });
+
+  it("refuses the same student ID even when the name is spelled differently", async () => {
+    const { code } = await openedActivity("Student ID duplicate");
+    await joinActivity({ sessionCode: code, fullName: "Ana Cruz", studentId: "2024-00123" }, BEFORE);
+    await assert.rejects(
+      joinActivity({ sessionCode: code, fullName: "Anna Cruz", studentId: " 2024-00123 " }, BEFORE),
+      isStatus(409, "STUDENT_ID_TAKEN"),
+    );
+  });
+
+  it("treats student IDs case-insensitively and keeps leading zeroes on record", async () => {
+    const { code, id: activityId } = await openedActivity("Student ID case");
+    await joinActivity({ sessionCode: code, fullName: "Ben Reyes", studentId: "007-lee" }, BEFORE);
+    await assert.rejects(
+      joinActivity({ sessionCode: code, fullName: "Ben Reyes Jr", studentId: "007-LEE" }, BEFORE),
+      isStatus(409, "STUDENT_ID_TAKEN"),
+    );
+    const row = await prisma.participant.findFirstOrThrow({ where: { activityId, normalizedStudentId: "007-LEE" } });
+    assert.equal(row.studentId, "007-lee");
+  });
+
+  it("allows the same student ID in a different activity", async () => {
+    const first = await openedActivity("Same ID A");
+    const second = await openedActivity("Same ID B");
+    await joinActivity({ sessionCode: first.code, fullName: "Cy Dela", studentId: "555123" }, BEFORE);
+    const joined = await joinActivity({ sessionCode: second.code, fullName: "Cy Dela", studentId: "555123" }, BEFORE);
+    assert.ok(joined.participantId > 0);
+  });
+
+  it("requires a student ID with a field-level message", async () => {
+    const { code } = await openedActivity("Missing ID");
+    await assert.rejects(joinActivity({ sessionCode: code, fullName: "Nora Lee", studentId: "" }, BEFORE), (e: unknown) =>
+      e instanceof AppError && e.status === 400 && "studentId" in (e.fields ?? {}),
+    );
   });
 
   it("allows the same name in a different activity", async () => {
     const first = await openedActivity("Same name A");
     const second = await openedActivity("Same name B");
-    await joinActivity({ sessionCode: first.code, fullName: "Dan Lim" }, BEFORE);
-    const joined = await joinActivity({ sessionCode: second.code, fullName: "Dan Lim" }, BEFORE);
+    await joinActivity({ sessionCode: first.code, fullName: "Dan Lim", studentId: "S-009" }, BEFORE);
+    const joined = await joinActivity({ sessionCode: second.code, fullName: "Dan Lim", studentId: "S-010" }, BEFORE);
     assert.ok(joined.participantId > 0);
   });
 
   it("rejects an invalid name with a field-level message", async () => {
     const { code } = await openedActivity("Bad name");
-    await assert.rejects(joinActivity({ sessionCode: code, fullName: "R2D2" }, BEFORE), (e: unknown) =>
+    await assert.rejects(joinActivity({ sessionCode: code, fullName: "R2D2", studentId: "S-011" }, BEFORE), (e: unknown) =>
       e instanceof AppError && e.status === 400 && "fullName" in (e.fields ?? {}),
     );
   });
@@ -122,7 +157,7 @@ describe("joining an activity", () => {
   it("serialises simultaneous joins with the same name: exactly one succeeds", async () => {
     const { code } = await openedActivity("Race to join");
     const attempts = await Promise.allSettled(
-      Array.from({ length: 10 }, () => joinActivity({ sessionCode: code, fullName: "Same Person" }, BEFORE)),
+      Array.from({ length: 10 }, (_, i) => joinActivity({ sessionCode: code, fullName: "Same Person", studentId: `RACE-${i}` }, BEFORE)),
     );
     const won = attempts.filter((a) => a.status === "fulfilled").length;
     const lost = attempts.filter((a) => a.status === "rejected" && (a.reason as AppError).code === "NAME_TAKEN").length;
@@ -134,7 +169,7 @@ describe("joining an activity", () => {
 describe("the student view and token binding", () => {
   it("shows questions and choices to the joined participant, with no correct-answer information", async () => {
     const { id, code } = await openedActivity("Student view");
-    const { token } = await joinActivity({ sessionCode: code, fullName: "Eve Tan" }, BEFORE);
+    const { token } = await joinActivity({ sessionCode: code, fullName: "Eve Tan", studentId: "S-013" }, BEFORE);
     const view = await getStudentActivity(id, token, BEFORE);
     assert.equal(view.activity.status, "OPEN");
     assert.equal(view.questions.length, 2);
@@ -147,7 +182,7 @@ describe("the student view and token binding", () => {
   it("refuses the view with no token, a made-up token, or another activity's token (same 401)", async () => {
     const a = await openedActivity("Binding A");
     const b = await openedActivity("Binding B");
-    const { token: tokenForA } = await joinActivity({ sessionCode: a.code, fullName: "Frank Uy" }, BEFORE);
+    const { token: tokenForA } = await joinActivity({ sessionCode: a.code, fullName: "Frank Uy", studentId: "S-014" }, BEFORE);
     await assert.rejects(getStudentActivity(a.id, undefined, BEFORE), isStatus(401, "UNAUTHENTICATED"));
     await assert.rejects(getStudentActivity(a.id, "not-a-real-token", BEFORE), isStatus(401, "UNAUTHENTICATED"));
     await assert.rejects(getStudentActivity(b.id, tokenForA, BEFORE), isStatus(401, "UNAUTHENTICATED"));
@@ -155,8 +190,8 @@ describe("the student view and token binding", () => {
 
   it("never shows another student's name", async () => {
     const { id, code } = await openedActivity("Privacy");
-    const me = await joinActivity({ sessionCode: code, fullName: "Gina Lopez" }, BEFORE);
-    await joinActivity({ sessionCode: code, fullName: "Hugo Park" }, BEFORE);
+    const me = await joinActivity({ sessionCode: code, fullName: "Gina Lopez", studentId: "S-015" }, BEFORE);
+    await joinActivity({ sessionCode: code, fullName: "Hugo Park", studentId: "S-016" }, BEFORE);
     const view = JSON.stringify(await getStudentActivity(id, me.token, BEFORE));
     assert.ok(view.includes("Gina Lopez"));
     assert.ok(!view.includes("Hugo Park"));
@@ -164,7 +199,7 @@ describe("the student view and token binding", () => {
 
   it("a closed activity shows status and no questions", async () => {
     const { id, code } = await openedActivity("Closed view");
-    const { token } = await joinActivity({ sessionCode: code, fullName: "Ivy Ong" }, BEFORE);
+    const { token } = await joinActivity({ sessionCode: code, fullName: "Ivy Ong", studentId: "S-017" }, BEFORE);
     await closeActivity(owner, id, BEFORE);
     const view = await getStudentActivity(id, token, BEFORE);
     assert.equal(view.activity.status, "CLOSED");
@@ -173,7 +208,7 @@ describe("the student view and token binding", () => {
 
   it("authenticateParticipant resolves only the matching activity", async () => {
     const { id, code } = await openedActivity("Auth helper");
-    const { token } = await joinActivity({ sessionCode: code, fullName: "Jay Ferrer" }, BEFORE);
+    const { token } = await joinActivity({ sessionCode: code, fullName: "Jay Ferrer", studentId: "S-018" }, BEFORE);
     const p = await authenticateParticipant(id, token);
     assert.equal(p.displayName, "Jay Ferrer");
   });

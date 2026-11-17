@@ -10,10 +10,28 @@ const dev = false;
 
 const certificatesDirectory = join(process.cwd(), "certificates");
 
+//balay janice
+const httpsOptions = {
+  key: readFileSync(join(certificatesDirectory, "pollify-key.pem")),
+  cert: readFileSync(join(certificatesDirectory, "pollify-cert.pem")),
+};
+
+
+//skwelahan - janice (nb 2 -3 ip address: 192.168.1.204)
+/*
+const httpsOptions = {
+  key: readFileSync(join(certificatesDirectory, "pollifyschool-key.pem")),
+  cert: readFileSync(join(certificatesDirectory, "pollifyschool-cert.pem")),
+};
+*/
+
+//duty sa brgy - janice (brgyhall ip address: 192.168.100.98)
+/*
 const httpsOptions = {
   key: readFileSync(join(certificatesDirectory, "pollifybrgy-key.pem")),
   cert: readFileSync(join(certificatesDirectory, "pollifybrgy-cert.pem")),
 };
+*/
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -26,7 +44,7 @@ async function startServer() {
   }).listen(port, hostname, () => {
     console.log(`Pollify HTTPS server running at:`);
     console.log(`  Local: https://localhost:${port}`);
-    console.log(`  LAN:   https://192.168.100.98:${port}`);
+    console.log(`  LAN:   https://192.168.254.115${port}`);
   });
 }
 

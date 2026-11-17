@@ -52,8 +52,16 @@ async function openedActivity(title: string, maxAttempts: 1 | 2 = 2) {
   };
 }
 
-async function studentJoin(a: { code: string }, name: string) {
-  return joinActivity({ sessionCode: a.code, fullName: name }, OPEN_AT);
+async function studentJoin(
+  a: { code: string },
+  name: string,
+  studentId = `ID-${name.replace(/[^A-Za-z0-9]/g, "")}`
+) {
+  return joinActivity({
+    sessionCode: a.code,
+    fullName: name,
+    studentId,
+  }, OPEN_AT);
 }
 
 const isStatus = (status: number, code: string) => (e: unknown) =>
@@ -183,17 +191,23 @@ describe("releasing access", () => {
     assert.equal(view.results[0].score, 2);
   });
 
-  it("without a release, a taken name still cannot join", async () => {
+  it("without a release, a taken name still cannot join", async ()=> {
     const a = await openedActivity("No release");
-    await studentJoin(a, "Still Taken");
-    await assert.rejects(studentJoin(a, "still   taken"), isStatus(409, "NAME_TAKEN"));
+    await studentJoin(a, "Still Taken", "ID-100001");
+    await assert.rejects(
+      studentJoin(a, "still   taken", "ID-100002"),
+      isStatus(409, "NAME_TAKEN")
+    );
   });
 
-  it("releasing one student does not free another student's name", async () => {
+  it("releasing one student does not free another student's name",async () => {
     const a = await openedActivity("Only one freed");
-    const first = await studentJoin(a, "Freed Kid");
-    await studentJoin(a, "Still Held");
+    const first = await studentJoin(a, "Freed Kid", "ID-200001");
+    await studentJoin(a, "Still Held", "ID-200002");
     await releaseAccess(owner, a.id, first.participantId);
-    await assert.rejects(studentJoin(a, "Still Held"), isStatus(409, "NAME_TAKEN"));
+    await assert.rejects(
+      studentJoin(a, "Still Held", "ID-200003"),
+      isStatus(409, "NAME_TAKEN")
+    );
   });
 });

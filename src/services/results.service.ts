@@ -40,6 +40,8 @@ async function ownedActivity(instructorId: number, activityId: number) {
 export type ParticipantResultDto = {
   participantId: number;
   displayName: string;
+  /** As entered by the student. Null for participants who joined before IDs were required. */
+  studentId: string | null;
   joinedAt: string;
   accessReleasedAt: string | null;
   /** Every submitted attempt, kept separately: attempt 1 and, if any, attempt 2. */
@@ -104,6 +106,7 @@ export async function getActivityResults(instructorId: number, activityId: numbe
       select: {
         id: true,
         displayName: true,
+        studentId: true,
         joinedAt: true,
         accessReleasedAt: true,
         submissions: {
@@ -139,6 +142,7 @@ export async function getActivityResults(instructorId: number, activityId: numbe
     return {
       participantId: p.id,
       displayName: p.displayName,
+      studentId: p.studentId,
       joinedAt: p.joinedAt.toISOString(),
       accessReleasedAt: iso(p.accessReleasedAt),
       attempts,

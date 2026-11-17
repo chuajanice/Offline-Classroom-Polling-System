@@ -49,6 +49,7 @@ export function ParticipantTable({
         <table className="w-full min-w-[860px] text-sm">
           <thead className="border-b text-left text-muted-foreground">
             <tr>
+              <th className="py-2 pr-3 font-medium">Student ID</th>
               <th className="py-2 pr-3 font-medium">Name</th>
               <th className="py-2 pr-3 font-medium">Status</th>
               <th className="py-2 pr-3 font-medium">Attempt 1</th>
@@ -63,6 +64,9 @@ export function ParticipantTable({
               const second = p.attempts.find((a) => a.attemptNumber === 2);
               return (
                 <tr key={p.participantId} className="border-b last:border-0 align-top">
+                  <td className="py-3 pr-3 whitespace-nowrap tabular-nums">
+                    {p.studentId ?? <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="py-3 pr-3 font-medium">
                     {p.displayName}
                     {p.accessReleasedAt && <Badge variant="outline" className="ml-2">Access released</Badge>}

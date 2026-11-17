@@ -1,6 +1,6 @@
 "use client";
 
-// Student join: a full name and the session code. No account, no password.
+// Student join: session code, student ID and full name. No account, no password.
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,6 +16,7 @@ export function JoinForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [sessionCode, setSessionCode] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export function JoinForm() {
     setPending(true);
     setErrors({});
     setFormError(null);
-    const result = await requestJson("POST", "/api/student/join", { fullName, sessionCode });
+    const result = await requestJson("POST", "/api/student/join", { fullName, studentId, sessionCode });
     if (!result.ok) {
       setPending(false);
       setErrors(result.error.fields);
@@ -42,7 +43,7 @@ export function JoinForm() {
     <Card>
       <CardHeader>
         <CardTitle className="text-xl">Join an activity</CardTitle>
-        <CardDescription>Enter your full name and the session code your instructor shows you.</CardDescription>
+        <CardDescription>Enter your student ID, full name and the session code your instructor shows you.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} noValidate className="space-y-5">
@@ -68,6 +69,27 @@ export function JoinForm() {
               aria-invalid={Boolean(errors.sessionCode)}
             />
             <p className="text-xs text-muted-foreground">Hyphens and spaces are optional.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="studentId">Student ID</Label>
+            <Input
+              id="studentId"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={60}
+              className="h-12 font-mono"
+              placeholder="e.g. 2024-00123"
+              aria-invalid={Boolean(errors.studentId)}
+              aria-describedby={errors.studentId ? "studentId-error" : undefined}
+            />
+            {errors.studentId && (
+              <p id="studentId-error" className="text-sm text-destructive">{errors.studentId}</p>
+            )}
+            <p className="text-xs text-muted-foreground">Keep leading zeroes exactly as on your ID card.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>

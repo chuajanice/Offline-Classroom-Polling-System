@@ -127,6 +127,7 @@ export function parseDottedOrThrow<S extends z.ZodType>(schema: S, data: unknown
 /** Lengths only here. The name rules and code format are checked in the service layer. */
 export const joinInputSchema = z.object({
   sessionCode: z.string().max(40, "Enter the session code."),
+  studentId: z.string().max(60, "Your student ID is too long."),
   fullName: z.string().max(200, "Your name is too long."),
 });
 export type JoinInput = z.output<typeof joinInputSchema>;
