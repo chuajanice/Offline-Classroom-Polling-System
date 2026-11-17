@@ -44,7 +44,7 @@ async function startServer() {
   }).listen(port, hostname, () => {
     console.log(`Pollify HTTPS server running at:`);
     console.log(`  Local: https://localhost:${port}`);
-    console.log(`  LAN:   https://192.168.254.115${port}`);
+    console.log(`  LAN:   https://192.168.254.115:${port}`);
   });
 }
 
